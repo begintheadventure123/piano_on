@@ -1,0 +1,68 @@
+<Window x:Class="PianoActivityTracker.Platform.Windows.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Piano Activity Tracker"
+        Height="580"
+        Width="760"
+        MinHeight="520"
+        MinWidth="680">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0">
+            <Button Content="Start Session"
+                    Width="130"
+                    Margin="0,0,10,0"
+                    Command="{Binding StartCommand}" />
+            <Button Content="Stop Session"
+                    Width="130"
+                    Command="{Binding StopCommand}" />
+        </StackPanel>
+
+        <Border Grid.Row="1" Margin="0,16,0,0" Padding="12" CornerRadius="6" Background="#F2F2F2">
+            <StackPanel>
+                <TextBlock Text="Status" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding StatusText}" FontSize="18" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#F7FBFF">
+            <StackPanel>
+                <TextBlock Text="Accumulated Piano Time" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding LiveTimeText}" FontSize="26" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="3" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FFF7F0">
+            <StackPanel>
+                <TextBlock Text="Session Summary" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding SummaryText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ErrorText}" Margin="0,6,0,0" Foreground="#B00020" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="4" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FAFAFA">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Session History" FontWeight="SemiBold" Margin="0,0,0,10" />
+                <ListView ItemsSource="{Binding History}">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Session" Width="220" DisplayMemberBinding="{Binding SessionDateText}" />
+                            <GridViewColumn Header="Total Piano Time" Width="150" DisplayMemberBinding="{Binding TotalTimeText}" />
+                            <GridViewColumn Header="Segments" Width="100" DisplayMemberBinding="{Binding SegmentsCount}" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
