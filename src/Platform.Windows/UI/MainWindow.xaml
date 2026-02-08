@@ -5,12 +5,13 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Piano Activity Tracker"
-        Height="580"
-        Width="760"
-        MinHeight="520"
-        MinWidth="680">
+        Height="720"
+        Width="820"
+        MinHeight="680"
+        MinWidth="760">
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -42,7 +43,35 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="3" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FFF7F0">
+        <Border Grid.Row="3" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#EFF6FF">
+            <StackPanel>
+                <TextBlock Text="Audio Input" FontWeight="SemiBold" />
+                <Viewbox Margin="0,8,0,0" Height="90" Stretch="Fill">
+                    <Canvas Width="240" Height="70" Background="#D9E8FF">
+                        <Polyline Points="{Binding WaveformPoints}"
+                                  Stroke="#1B4D8A"
+                                  StrokeThickness="1.5"
+                                  Opacity="{Binding WaveformOpacity}"
+                                  Visibility="{Binding WaveformVisibility}" />
+                    </Canvas>
+                </Viewbox>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock Text="{Binding LastFrameText}" />
+                    <TextBlock Text=" • " />
+                    <TextBlock Text="{Binding FrameCount}" />
+                    <TextBlock Text=" frames" />
+                    <TextBlock Text=" • RMS " />
+                    <TextBlock Text="{Binding WaveformRms, StringFormat={}{0:0.0000}}" />
+                </StackPanel>
+                <TextBlock Text="{Binding DebugInfoText}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DebugRecordingText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DebugRawText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DebugRawStatsText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DebugCallbackText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="4" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FFF7F0">
             <StackPanel>
                 <TextBlock Text="Session Summary" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding SummaryText}" Margin="0,6,0,0" TextWrapping="Wrap" />
@@ -50,7 +79,7 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="4" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FAFAFA">
+        <Border Grid.Row="5" Margin="0,12,0,0" Padding="12" CornerRadius="6" Background="#FAFAFA">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Session History" FontWeight="SemiBold" Margin="0,0,0,10" />
                 <ListView ItemsSource="{Binding History}">

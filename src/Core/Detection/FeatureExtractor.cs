@@ -24,6 +24,8 @@ public sealed class FeatureExtractor
         var centroid = ComputeCentroid(spectrum, freqResolution);
         var bandwidth = ComputeBandwidth(spectrum, freqResolution, centroid);
         var rolloff = ComputeRolloff(spectrum, freqResolution, 0.85f);
+        var flatness = ComputeSpectralFlatness(spectrum);
+        ComputeBandEnergies(spectrum, freqResolution, out var lowEnergy, out var midEnergy, out var highEnergy);
 
         var mfcc = ComputePlaceholderMfcc(spectrum);
 
@@ -33,6 +35,10 @@ public sealed class FeatureExtractor
             centroid,
             bandwidth,
             rolloff,
+            flatness,
+            lowEnergy,
+            midEnergy,
+            highEnergy,
             mfcc[0],
             mfcc[1],
             mfcc[2],
@@ -158,6 +164,66 @@ public sealed class FeatureExtractor
         }
 
         return (magnitudes.Length - 1) * freqResolution;
+    }
+
+    private static float ComputeSpectralFlatness(ReadOnlySpan<float> magnitudes)
+    {
+        if (magnitudes.Length == 0)
+        {
+            return 0;
+        }
+
+        double geoMeanLog = 0;
+        double arithMean = 0;
+        var count = 0;
+
+        for (var i = 0; i < magnitudes.Length; i++)
+        {
+            var mag = Math.Max(magnitudes[i], 1e-12f);
+            geoMeanLog += Math.Log(mag);
+            arithMean += mag;
+            count++;
+        }
+
+        if (count == 0 || arithMean <= 0)
+        {
+            return 0;
+        }
+
+        var geoMean = Math.Exp(geoMeanLog / count);
+        var flatness = geoMean / (arithMean / count);
+        return (float)Math.Clamp(flatness, 0.0, 1.0);
+    }
+
+    private static void ComputeBandEnergies(ReadOnlySpan<float> magnitudes, float freqResolution, out float low, out float mid, out float high)
+    {
+        double lowSum = 0;
+        double midSum = 0;
+        double highSum = 0;
+
+        for (var i = 0; i < magnitudes.Length; i++)
+        {
+            var freq = i * freqResolution;
+            var mag = magnitudes[i];
+            var energy = mag * mag;
+
+            if (freq < 300f)
+            {
+                lowSum += energy;
+            }
+            else if (freq < 2000f)
+            {
+                midSum += energy;
+            }
+            else
+            {
+                highSum += energy;
+            }
+        }
+
+        low = (float)Math.Log10(1 + lowSum);
+        mid = (float)Math.Log10(1 + midSum);
+        high = (float)Math.Log10(1 + highSum);
     }
 
     private static float[] ComputePlaceholderMfcc(ReadOnlySpan<float> magnitudes)
