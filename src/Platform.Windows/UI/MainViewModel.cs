@@ -5,11 +5,16 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using PianoActivityTracker.Core.Accumulation;
 using PianoActivityTracker.Core.Audio;
 using PianoActivityTracker.Core.Detection;
 using PianoActivityTracker.Core.Storage;
 using PianoActivityTracker.Platform.Windows.Audio;
+using Forms = System.Windows.Forms;
+using Point = System.Windows.Point;
 
 namespace PianoActivityTracker.Platform.Windows.UI;
 
@@ -22,10 +27,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly DispatcherTimer _uiTimer;
 
     private bool _isRunning;
+    private bool _isAnalyzingFile;
     private string _statusText = "Ready";
     private string _liveTimeText = "00:00:00";
     private string _summaryText = string.Empty;
     private string _errorText = string.Empty;
+    private string _uploadFolderPath = GetDefaultUploadFolder();
+    private string _selectedAudioFilePath = string.Empty;
     private PointCollection _waveformPoints = new();
     private Visibility _waveformVisibility = Visibility.Collapsed;
     private double _waveformOpacity = 0.35;
@@ -42,6 +50,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private const int WaveformHeight = 70;
     private const int WaveformPointCount = 240;
     private const float SoundRmsThreshold = 0.003f;
+    private const int AnalysisSampleRate = 16_000;
+    private const int AnalysisFrameSamples = 16_000;
+    private const int AnalysisHopSamples = 4_000;
 
     public MainViewModel()
         : this(
@@ -68,8 +79,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _accumulator = accumulator;
         _sessionStore = sessionStore;
 
-        StartCommand = new RelayCommand(StartSession, () => !IsRunning);
-        StopCommand = new RelayCommand(StopSession, () => IsRunning);
+        StartCommand = new RelayCommand(StartSession, () => !IsRunning && !IsAnalyzingFile);
+        StopCommand = new RelayCommand(StopSession, () => IsRunning && !IsAnalyzingFile);
+        BrowseFolderCommand = new RelayCommand(BrowseUploadFolder, () => !IsRunning && !IsAnalyzingFile);
+        ReloadFilesCommand = new RelayCommand(ReloadAudioFiles, () => !IsRunning && !IsAnalyzingFile);
+        BrowseFileCommand = new RelayCommand(BrowseAudioFile, () => !IsRunning && !IsAnalyzingFile);
+        AnalyzeFileCommand = new RelayCommand(AnalyzeSelectedFile, () => !IsRunning && !IsAnalyzingFile && !string.IsNullOrWhiteSpace(SelectedAudioFilePath));
 
         _audioSource.OnFrameReady += OnFrameReady;
 
@@ -84,7 +99,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             UpdateDebugFromSource();
         };
 
+        AvailableAudioFiles = new ObservableCollection<string>();
         History = new ObservableCollection<SessionHistoryItem>();
+        ReloadAudioFiles();
         ReloadHistory();
     }
 
@@ -94,7 +111,33 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public RelayCommand StopCommand { get; }
 
+    public RelayCommand BrowseFolderCommand { get; }
+
+    public RelayCommand ReloadFilesCommand { get; }
+
+    public RelayCommand BrowseFileCommand { get; }
+
+    public RelayCommand AnalyzeFileCommand { get; }
+
+    public ObservableCollection<string> AvailableAudioFiles { get; }
+
     public ObservableCollection<SessionHistoryItem> History { get; }
+
+    public bool IsAnalyzingFile
+    {
+        get => _isAnalyzingFile;
+        private set
+        {
+            if (_isAnalyzingFile == value)
+            {
+                return;
+            }
+
+            _isAnalyzingFile = value;
+            OnPropertyChanged();
+            RaiseActionCommandsChanged();
+        }
+    }
 
     public bool IsRunning
     {
@@ -108,8 +151,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             _isRunning = value;
             OnPropertyChanged();
-            StartCommand.RaiseCanExecuteChanged();
-            StopCommand.RaiseCanExecuteChanged();
+            RaiseActionCommandsChanged();
         }
     }
 
@@ -170,6 +212,37 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             _errorText = value;
             OnPropertyChanged();
+        }
+    }
+
+    public string UploadFolderPath
+    {
+        get => _uploadFolderPath;
+        set
+        {
+            if (_uploadFolderPath == value)
+            {
+                return;
+            }
+
+            _uploadFolderPath = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string SelectedAudioFilePath
+    {
+        get => _selectedAudioFilePath;
+        set
+        {
+            if (_selectedAudioFilePath == value)
+            {
+                return;
+            }
+
+            _selectedAudioFilePath = value;
+            OnPropertyChanged();
+            AnalyzeFileCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -338,6 +411,219 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private void RaiseActionCommandsChanged()
+    {
+        StartCommand.RaiseCanExecuteChanged();
+        StopCommand.RaiseCanExecuteChanged();
+        BrowseFolderCommand.RaiseCanExecuteChanged();
+        ReloadFilesCommand.RaiseCanExecuteChanged();
+        BrowseFileCommand.RaiseCanExecuteChanged();
+        AnalyzeFileCommand.RaiseCanExecuteChanged();
+    }
+
+    private void BrowseUploadFolder()
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "Select folder that contains target audio files",
+            InitialDirectory = Directory.Exists(UploadFolderPath) ? UploadFolderPath : AppContext.BaseDirectory,
+            UseDescriptionForTitle = true,
+            AutoUpgradeEnabled = true
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            return;
+        }
+
+        UploadFolderPath = dialog.SelectedPath;
+        ReloadAudioFiles();
+    }
+
+    private void ReloadAudioFiles()
+    {
+        AvailableAudioFiles.Clear();
+
+        if (!Directory.Exists(UploadFolderPath))
+        {
+            return;
+        }
+
+        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".wav", ".m4a", ".mp3", ".wma", ".aac", ".flac"
+        };
+
+        var files = Directory.GetFiles(UploadFolderPath, "*.*", SearchOption.AllDirectories)
+            .Where(path => extensions.Contains(Path.GetExtension(path)))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in files)
+        {
+            AvailableAudioFiles.Add(file);
+        }
+
+        if (AvailableAudioFiles.Count > 0 && string.IsNullOrWhiteSpace(SelectedAudioFilePath))
+        {
+            SelectedAudioFilePath = AvailableAudioFiles[0];
+        }
+        else if (!string.IsNullOrWhiteSpace(SelectedAudioFilePath) && !AvailableAudioFiles.Contains(SelectedAudioFilePath))
+        {
+            SelectedAudioFilePath = AvailableAudioFiles.FirstOrDefault() ?? string.Empty;
+        }
+    }
+
+    private void BrowseAudioFile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Select target audio file",
+            Filter = "Audio Files (*.m4a;*.wav;*.mp3;*.wma;*.aac;*.flac)|*.m4a;*.wav;*.mp3;*.wma;*.aac;*.flac|All Files (*.*)|*.*",
+            CheckFileExists = true,
+            CheckPathExists = true,
+            Multiselect = false,
+            InitialDirectory = Directory.Exists(UploadFolderPath) ? UploadFolderPath : GetDefaultUploadFolder()
+        };
+
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.FileName))
+        {
+            return;
+        }
+
+        SelectedAudioFilePath = dialog.FileName;
+        var selectedDir = Path.GetDirectoryName(dialog.FileName);
+        if (!string.IsNullOrWhiteSpace(selectedDir))
+        {
+            UploadFolderPath = selectedDir;
+            ReloadAudioFiles();
+            SelectedAudioFilePath = dialog.FileName;
+        }
+    }
+
+    private async void AnalyzeSelectedFile()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedAudioFilePath) || !File.Exists(SelectedAudioFilePath))
+        {
+            ErrorText = "Please select an existing audio file first.";
+            return;
+        }
+
+        ErrorText = string.Empty;
+        SummaryText = string.Empty;
+        StatusText = "Analyzing file...";
+        IsAnalyzingFile = true;
+
+        try
+        {
+            var analysis = await Task.Run(() => AnalyzeFileInternal(SelectedAudioFilePath));
+
+            LiveTimeText = FormatDuration(analysis.Summary.TotalPianoTime);
+            SummaryText =
+                $"File: {Path.GetFileName(SelectedAudioFilePath)}\n" +
+                $"Total Piano Time: {FormatDuration(analysis.Summary.TotalPianoTime)}\n" +
+                $"Segments: {analysis.Summary.Segments.Count}\n" +
+                $"Processed Frames: {analysis.ProcessedFrames}";
+            StatusText = "Analysis complete";
+            FrameCount = analysis.ProcessedFrames;
+            _lastFrameUtc = DateTime.UtcNow;
+            OnPropertyChanged(nameof(LastFrameText));
+            _sessionStore.Save(analysis.Summary);
+            ReloadHistory();
+
+            if (!string.IsNullOrWhiteSpace(analysis.Warning))
+            {
+                ErrorText = analysis.Warning;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Error";
+            ErrorText = $"File analysis failed: {ex.Message}";
+        }
+        finally
+        {
+            IsAnalyzingFile = false;
+        }
+    }
+
+    private static FileAnalysisResult AnalyzeFileInternal(string path)
+    {
+        var detector = CreateDefaultDetector(out var warning);
+        try
+        {
+            var samples = LoadAsMono16k(path);
+            var accumulator = new ActivityAccumulator();
+            var sessionStart = DateTime.UtcNow;
+            accumulator.StartSession(sessionStart);
+
+            var processedFrames = 0;
+            for (var offset = 0; offset + AnalysisFrameSamples <= samples.Length; offset += AnalysisHopSamples)
+            {
+                var frameSamples = new float[AnalysisFrameSamples];
+                Array.Copy(samples, offset, frameSamples, 0, AnalysisFrameSamples);
+                var timestamp = sessionStart + TimeSpan.FromSeconds((double)(processedFrames * AnalysisHopSamples) / AnalysisSampleRate);
+                var frame = new AudioFrame(frameSamples, AnalysisSampleRate, timestamp);
+                var detection = detector.Process(frame);
+                accumulator.Process(detection);
+                processedFrames++;
+            }
+
+            var sessionEnd = sessionStart + TimeSpan.FromSeconds((double)samples.Length / AnalysisSampleRate);
+            var summary = accumulator.StopSession(sessionEnd);
+            return new FileAnalysisResult(summary, processedFrames, warning);
+        }
+        finally
+        {
+            if (detector is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+        }
+    }
+
+    private static float[] LoadAsMono16k(string path)
+    {
+        using var reader = new MediaFoundationReader(path);
+        ISampleProvider sampleProvider = reader.ToSampleProvider();
+
+        if (sampleProvider.WaveFormat.Channels > 1)
+        {
+            if (sampleProvider.WaveFormat.Channels != 2)
+            {
+                throw new NotSupportedException("Only mono/stereo input audio is supported for offline analysis.");
+            }
+
+            sampleProvider = new StereoToMonoSampleProvider(sampleProvider)
+            {
+                LeftVolume = 0.5f,
+                RightVolume = 0.5f
+            };
+        }
+
+        if (sampleProvider.WaveFormat.SampleRate != AnalysisSampleRate)
+        {
+            sampleProvider = new WdlResamplingSampleProvider(sampleProvider, AnalysisSampleRate);
+        }
+
+        var samples = new List<float>(AnalysisSampleRate * 60);
+        var buffer = new float[AnalysisSampleRate];
+        while (true)
+        {
+            var read = sampleProvider.Read(buffer, 0, buffer.Length);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            for (var i = 0; i < read; i++)
+            {
+                samples.Add(buffer[i]);
+            }
+        }
+
+        return samples.ToArray();
+    }
+
     private void StartSession()
     {
         ErrorText = string.Empty;
@@ -503,7 +789,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private static void RunOnUi(Action action)
     {
-        var dispatcher = Application.Current?.Dispatcher;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())
         {
             action();
@@ -590,6 +876,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         warning = "AST model pack not found or failed to load. Run scripts/download-ast-model.ps1 and rebuild.";
         return new RuleBasedPianoDetector();
     }
+
+    private static string GetDefaultUploadFolder()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (File.Exists(Path.Combine(current, "PianoActivityTracker.sln")) ||
+                Directory.Exists(Path.Combine(current, ".git")))
+            {
+                return current;
+            }
+
+            current = Path.GetDirectoryName(current) ?? string.Empty;
+        }
+
+        return AppContext.BaseDirectory;
+    }
+
+    private readonly record struct FileAnalysisResult(ActivitySummary Summary, int ProcessedFrames, string? Warning);
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

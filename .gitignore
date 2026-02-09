@@ -218,3 +218,19 @@ assets/models/ast/*
 # Local audio samples
 samples/*.m4a
 samples/*.wav
+
+# ML pipeline artifacts
+.venv-ml/
+ml/data/raw/**/*
+!ml/data/raw/**/.gitkeep
+ml/data/interim/**/*
+!ml/data/interim/.gitkeep
+ml/data/processed/**/*
+!ml/data/processed/.gitkeep
+ml/data/labels/manifest.csv
+ml/models/**/*
+!ml/models/.gitkeep
+ml/reports/**/*
+!ml/reports/.gitkeep
+ml/logs/**/*
+!ml/logs/.gitkeep
