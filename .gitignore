@@ -234,3 +234,20 @@ ml/reports/**/*
 !ml/reports/.gitkeep
 ml/logs/**/*
 !ml/logs/.gitkeep
+
+# ML iterative workflow data (runtime/generated, usually large)
+ml/data/inbox/**/*
+ml/data/review/**/*
+ml/data/ops/**/*
+
+# Keep only lightweight eval metadata/templates in git
+ml/data/eval/**/*
+!ml/data/eval/holdout_exclude_paths.txt
+!ml/data/eval/long_audio_annotations_template.csv
+!ml/data/eval/.gitkeep
+
+# Local DB and audio scratch files
+ml/data/ops/*.db
+ml/data/ops/*.db-*
+mixed/*.m4a
+mixed/*.wav

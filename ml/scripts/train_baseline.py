@@ -4,46 +4,20 @@ import json
 import numpy as np
 import pandas as pd
 import yaml
-import librosa
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 import joblib
 
-
-def featurize(path: str, cfg: dict) -> np.ndarray:
-    y, sr = librosa.load(path, sr=cfg["sample_rate"], mono=True, duration=cfg["max_duration_seconds"])
-    if y.size == 0:
-        return np.zeros(12, dtype=np.float32)
-
-    mel = librosa.feature.melspectrogram(
-        y=y,
-        sr=sr,
-        n_fft=cfg["n_fft"],
-        hop_length=cfg["hop_length"],
-        n_mels=cfg["n_mels"],
-        power=2.0,
-    )
-    logmel = librosa.power_to_db(mel + 1e-10)
-
-    feats = [
-        float(np.mean(logmel)),
-        float(np.std(logmel)),
-        float(np.percentile(logmel, 10)),
-        float(np.percentile(logmel, 50)),
-        float(np.percentile(logmel, 90)),
-    ]
-
-    centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
-    rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
-    zcr = librosa.feature.zero_crossing_rate(y)
-    rms = librosa.feature.rms(y=y)
-
-    for arr in (centroid, rolloff, zcr, rms):
-        feats.append(float(np.mean(arr)))
-        feats.append(float(np.std(arr)))
-
-    return np.array(feats, dtype=np.float32)
+from model_utils import (
+    apply_platt,
+    build_metrics,
+    choose_threshold_for_recall,
+    featurize,
+    grouped_split_indices,
+    source_group_key,
+    stratified_fallback_split,
+)
 
 
 def main():
@@ -59,11 +33,13 @@ def main():
 
     X = []
     y = []
+    groups = []
     kept_paths = []
     for row in df.itertuples(index=False):
         try:
             X.append(featurize(row.path, cfg))
             y.append(int(row.label))
+            groups.append(source_group_key(row.path))
             kept_paths.append(row.path)
         except Exception as ex:
             print(f"skip {row.path}: {ex}")
@@ -77,38 +53,118 @@ def main():
             "Training requires at least 2 classes. Add non-piano clips under ml/data/raw/non_piano."
         )
 
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=(1.0 - cfg["train_split"]), random_state=cfg["seed"], stratify=y
-    )
-
-    val_ratio = cfg["val_split"] / (cfg["val_split"] + cfg["test_split"])
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp, y_temp, test_size=(1.0 - val_ratio), random_state=cfg["seed"], stratify=y_temp
-    )
+    use_group_split = bool(cfg.get("group_split", {}).get("enabled", True))
+    split_mode = "grouped"
+    if use_group_split:
+        try:
+            tr_idx, va_idx, te_idx = grouped_split_indices(
+                y=y,
+                groups=groups,
+                train_size=float(cfg["train_split"]),
+                val_size=float(cfg["val_split"]),
+                test_size=float(cfg["test_split"]),
+                seed=int(cfg["seed"]),
+            )
+            X_train, X_val, X_test = X[tr_idx], X[va_idx], X[te_idx]
+            y_train, y_val, y_test = y[tr_idx], y[va_idx], y[te_idx]
+            if len(np.unique(y_train)) < 2 or len(np.unique(y_val)) < 2 or len(np.unique(y_test)) < 2:
+                raise RuntimeError("Grouped split produced a degenerate class distribution")
+        except Exception as ex:
+            print(f"group split fallback to stratified split: {ex}")
+            split_mode = "stratified_fallback"
+            X_train, X_val, X_test, y_train, y_val, y_test = stratified_fallback_split(
+                X,
+                y,
+                train_size=float(cfg["train_split"]),
+                val_size=float(cfg["val_split"]),
+                test_size=float(cfg["test_split"]),
+                seed=int(cfg["seed"]),
+            )
+    else:
+        split_mode = "stratified_config_disabled"
+        X_train, X_val, X_test, y_train, y_val, y_test = stratified_fallback_split(
+            X,
+            y,
+            train_size=float(cfg["train_split"]),
+            val_size=float(cfg["val_split"]),
+            test_size=float(cfg["test_split"]),
+            seed=int(cfg["seed"]),
+        )
 
     c = cfg["classifier"]["C"]
     max_iter = cfg["classifier"]["max_iter"]
     class_weight = cfg["classifier"]["class_weight"]
 
-    model = LogisticRegression(C=c, max_iter=max_iter, class_weight=class_weight)
+    # Standardizing handcrafted features improves optimizer stability for logistic regression.
+    model = make_pipeline(
+        StandardScaler(),
+        LogisticRegression(C=c, max_iter=max_iter, class_weight=class_weight),
+    )
     model.fit(X_train, y_train)
 
-    val_prob = model.predict_proba(X_val)[:, 1]
-    test_prob = model.predict_proba(X_test)[:, 1]
-    val_pred = (val_prob >= 0.5).astype(int)
-    test_pred = (test_prob >= 0.5).astype(int)
+    val_prob_raw = model.predict_proba(X_val)[:, 1]
+    test_prob_raw = model.predict_proba(X_test)[:, 1]
 
+    calibration_cfg = cfg.get("calibration", {})
+    calibration_enabled = bool(calibration_cfg.get("enabled", True))
+    calibration_method = str(calibration_cfg.get("method", "platt")).lower()
+    platt_coef = 1.0
+    platt_intercept = 0.0
+    if calibration_enabled and calibration_method == "platt":
+        calib = LogisticRegression(C=1.0, max_iter=1000, class_weight=None)
+        calib.fit(val_prob_raw.reshape(-1, 1), y_val)
+        platt_coef = float(calib.coef_[0, 0])
+        platt_intercept = float(calib.intercept_[0])
+        val_prob = apply_platt(val_prob_raw, platt_coef, platt_intercept)
+        test_prob = apply_platt(test_prob_raw, platt_coef, platt_intercept)
+    else:
+        calibration_enabled = False
+        val_prob = val_prob_raw
+        test_prob = test_prob_raw
+
+    recall_target = float(cfg.get("metrics", {}).get("recall_target_for_fpr", 0.95))
+    decision_threshold = choose_threshold_for_recall(y_val, val_prob, recall_target, default=0.5)
+    val_metrics = build_metrics(y_val, val_prob, decision_threshold, recall_target)
+    test_metrics = build_metrics(y_test, test_prob, decision_threshold, recall_target)
     metrics = {
-        "val_report": classification_report(y_val, val_pred, output_dict=True),
-        "test_report": classification_report(y_test, test_pred, output_dict=True),
-        "val_auc": float(roc_auc_score(y_val, val_prob)),
-        "test_auc": float(roc_auc_score(y_test, test_prob)),
         "num_samples": int(len(y)),
+        "split_mode": split_mode,
+        "split_counts": {
+            "train": int(len(y_train)),
+            "val": int(len(y_val)),
+            "test": int(len(y_test)),
+        },
+        "decision_threshold": float(decision_threshold),
+        "calibration": {
+            "enabled": calibration_enabled,
+            "method": "platt" if calibration_enabled else "none",
+            "coef": float(platt_coef),
+            "intercept": float(platt_intercept),
+        },
+        "val": val_metrics,
+        "test": test_metrics,
     }
 
     model_out = Path(args.model_out)
     model_out.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "config": cfg}, model_out)
+    joblib.dump(
+        {
+            "model": model,
+            "config": cfg,
+            "decision_threshold": float(decision_threshold),
+            "calibration": {
+                "enabled": calibration_enabled,
+                "method": "platt" if calibration_enabled else "none",
+                "coef": float(platt_coef),
+                "intercept": float(platt_intercept),
+            },
+            "training_meta": {
+                "split_mode": split_mode,
+                "num_samples": int(len(y)),
+            },
+        },
+        model_out,
+    )
 
     report_out = Path(args.report_out)
     report_out.parent.mkdir(parents=True, exist_ok=True)
@@ -116,7 +172,8 @@ def main():
 
     print(f"model: {model_out}")
     print(f"report: {report_out}")
-    print(f"val_auc={metrics['val_auc']:.4f} test_auc={metrics['test_auc']:.4f}")
+    print(f"threshold={metrics['decision_threshold']:.4f}")
+    print(f"val_auc={metrics['val']['auc_roc']:.4f} test_auc={metrics['test']['auc_roc']:.4f}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,2365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Piano Model Ops Dashboard</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Source+Sans+3:wght@400;600&display=swap");
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffcf6;
+      --ink: #1f1c17;
+      --muted: #665f54;
+      --line: #d8ccb7;
+      --brand: #0c7a6f;
+      --brand-soft: #d9f2ee;
+      --warn: #973100;
+      --ok: #216e26;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(900px 420px at 5% -5%, #fff6dc 0%, transparent 72%),
+        linear-gradient(165deg, #f8f5ee, var(--bg));
+      color: var(--ink);
+      font-family: "Source Sans 3", "Segoe UI", sans-serif;
+    }
+    .app {
+      max-width: 1260px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      font-family: "Manrope", sans-serif;
+      letter-spacing: 0.01em;
+    }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; margin-bottom: 10px; }
+    h3 { font-size: 16px; margin-bottom: 8px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      background: #fff;
+      max-width: 52%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #2a251f;
+      border-radius: 10px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-family: "Manrope", sans-serif;
+      font-size: 13px;
+    }
+    .tab.active {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+      color: #0f5d55;
+    }
+    .section {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .section.active { display: grid; }
+    .stack {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+    textarea {
+      min-height: 122px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #fbfaf7;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: #f6f0e4;
+      color: #312b23;
+      font-family: "Manrope", sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff;
+    }
+    .kpi .label { font-size: 11px; color: var(--muted); }
+    .kpi .value { font-size: 19px; font-family: "Manrope", sans-serif; font-weight: 800; }
+    .progress {
+      margin-top: 8px;
+      height: 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+      background: #f4eee2;
+    }
+    .bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0c7a6f, #1fa091);
+    }
+    .instruction {
+      border: 1px dashed #cabca4;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fffdf8;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 7px 10px;
+      font-size: 13px;
+    }
+    .meta .name { color: var(--muted); }
+    .meta .value { word-break: break-all; }
+    audio { width: 100%; }
+    .good { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .running { color: #8a5a00; }
+    .bar.indeterminate {
+      animation: moveBar 1.1s linear infinite;
+      width: 45%;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .focus-sink {
+      position: fixed;
+      left: -9999px;
+      top: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    #trainTab {
+      grid-template-columns: minmax(460px, 1fr) minmax(460px, 1fr);
+      align-items: start;
+    }
+    .train-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+    .train-actions button {
+      width: 100%;
+    }
+    .danger {
+      background: #fff2ef;
+      color: #7f2217;
+      border-color: #e3a79f;
+    }
+    .choice-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .choice-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .choice-pill input {
+      width: auto;
+      margin: 0;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .timeline-shell {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fffdf8, #f6f0e4);
+      padding: 10px;
+    }
+    .timeline-canvas {
+      width: 100%;
+      height: 320px;
+      display: block;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fffaf1, #f0e6d3);
+      cursor: crosshair;
+    }
+    .timeline-legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .timeline-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .timeline-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+    .timeline-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    @keyframes moveBar {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(260%); }
+    }
+    @media (max-width: 1060px) {
+      .section { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .pill { max-width: 100%; }
+      .two-col { grid-template-columns: 1fr; }
+      .timeline-stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="shortcutFocusSink" class="focus-sink" tabindex="-1" aria-hidden="true"></div>
+  <div class="app">
+    <div class="card header">
+      <div>
+        <h1>Piano Model Ops Dashboard</h1>
+        <div class="muted small">Structured workflow: ingest -> test -> review -> train/evaluate.</div>
+      </div>
+      <div class="pill" id="activeCsvPill">No active batch</div>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="ingestTab">Ingest & Test</button>
+        <button class="tab" data-tab="reviewTab">Review Labels</button>
+        <button class="tab" data-tab="longAudioTab">Long Audio Review</button>
+        <button class="tab" data-tab="timelineMarkTab">Timeline Mark</button>
+        <button class="tab" data-tab="trainTab">Train & Evaluate</button>
+      </div>
+    </div>
+
+    <section class="section active" id="ingestTab">
+      <div class="stack">
+        <div class="card stack">
+          <h2>Batch Input</h2>
+          <div class="instruction">
+            Step 1: Create/select batch automatically. Step 2: upload one or many long files. Step 3: run test pipeline.
+          </div>
+          <div class="row">
+            <button id="newBatchBtn">Create New Batch</button>
+            <div class="small muted" id="batchInfoText">Current batch: auto</div>
+          </div>
+          <label>Upload Long Files (multi-select)
+            <input id="uploadFilesInput" type="file" multiple accept=".wav,.mp3,.m4a,.aac,.wma,.flac,.aiff,.aif,audio/*">
+          </label>
+          <label>Uploaded File Label
+            <div class="choice-group">
+              <label class="choice-pill"><input type="radio" name="uploadLabelMode" value="" checked> No preset label</label>
+              <label class="choice-pill"><input type="radio" name="uploadLabelMode" value="non_piano"> All non-piano</label>
+              <label class="choice-pill"><input type="radio" name="uploadLabelMode" value="piano"> All piano</label>
+            </div>
+          </label>
+          <div>
+            <div class="small muted" id="uploadStatusText">No upload in progress.</div>
+            <div class="progress"><div id="uploadProgressBar" class="bar"></div></div>
+          </div>
+          <div class="row">
+            <button id="uploadBtn">Upload Files To Batch</button>
+            <button id="runBatchBtnTop" class="primary">Run Test Pipeline</button>
+          </div>
+        </div>
+
+        <div class="card stack">
+          <h3>Test Configuration</h3>
+          <label>Model Path
+            <input id="modelInput" value="ml/models/piano_detector_v23_ensemble.joblib">
+          </label>
+          <div class="row">
+            <label style="width:140px;">FP Threshold
+              <input id="fpThresholdInput" type="number" step="0.01" placeholder="model default">
+            </label>
+            <label style="width:120px;">Top-K
+              <input id="topKInput" type="number" value="120">
+            </label>
+            <label style="width:120px;">Clip Sec
+              <input id="clipSecInput" type="number" step="0.5" value="8">
+            </label>
+            <label style="width:120px;">Hop Sec
+              <input id="hopSecInput" type="number" step="0.5" value="8">
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex; align-items:center; gap:6px; width:auto; color:var(--ink);">
+              <input id="autoPromoteCheck" type="checkbox" style="width:auto;"> Auto-promote all as non-piano
+            </label>
+          </div>
+          <div class="row">
+            <button id="runBatchBtn" class="primary">Run Test Pipeline + Load Review</button>
+          </div>
+          <div id="pipelineStatusText" class="small muted">Pipeline idle.</div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <h2>Testing Snapshot</h2>
+          <div class="kpis">
+            <div class="kpi"><div class="label">Scored</div><div class="value" id="kScored">0</div></div>
+            <div class="kpi"><div class="label">Model Piano</div><div class="value" id="kModelPiano">0</div></div>
+            <div class="kpi"><div class="label">Model Non-Piano</div><div class="value" id="kModelNonPiano">0</div></div>
+            <div class="kpi"><div class="label">Review Candidates</div><div class="value" id="kCandidates">0</div></div>
+          </div>
+          <div id="snapshotText" class="small muted" style="margin-top:8px;">Run a batch to populate metrics.</div>
+        </div>
+        <div class="card">
+          <h3>Operation Log</h3>
+          <textarea id="logBox" readonly></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reviewTab">
+      <div class="stack">
+        <div class="card stack">
+          <h2>Review Loader</h2>
+          <div class="instruction">
+            Review queue is auto-loaded from the active batch and labels auto-save into the activity database.
+          </div>
+          <label>Batch Path
+            <input id="batchReviewInput" placeholder="ml/data/inbox/<batch>">
+          </label>
+          <div class="row">
+            <button id="loadBatchBtn">Load Batch Review</button>
+            <button id="buildHardPositiveBtn">Build Hard-Positive Queue</button>
+            <button id="loadFalseNegativeBtn">Load Missed Piano Holdout</button>
+          </div>
+          <div id="reviewStorageText" class="small muted">Labels auto-save to DB. No manual export needed.</div>
+        </div>
+
+        <div class="card">
+          <h3>Label Progress</h3>
+          <div class="kpis">
+            <div class="kpi"><div class="label">Total</div><div class="value" id="kTotal">0</div></div>
+            <div class="kpi"><div class="label">Labeled</div><div class="value" id="kLabeled">0</div></div>
+            <div class="kpi"><div class="label">Unlabeled</div><div class="value" id="kUnlabeled">0</div></div>
+            <div class="kpi"><div class="label">Unclear</div><div class="value" id="kUnclear">0</div></div>
+          </div>
+          <div class="progress"><div id="progressBar" class="bar"></div></div>
+          <div id="statusLine" class="small muted" style="margin-top:8px;">No review loaded.</div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <h2>Clip Reviewer</h2>
+          <div class="row" style="margin-bottom: 5px;">
+            <button id="nonBtn">1 Non-Piano</button>
+            <button id="pianoBtn">2 Piano</button>
+            <button id="unclearBtn">3 Unclear</button>
+            <button id="clearBtn">Clear</button>
+          </div>
+          <audio id="player" controls preload="auto"></audio>
+          <div class="row">
+            <button id="prevBtn">Prev</button>
+            <button id="nextBtn">Next</button>
+            <button id="unlabeledBtn">Next Unlabeled</button>
+          </div>
+          <div class="meta">
+            <div class="name">Index</div><div class="value" id="metaIndex">-</div>
+            <div class="name">Review Rank</div><div class="value" id="metaRank">-</div>
+            <div class="name" id="metaScoreLabel">Review Score</div><div class="value" id="metaProb">-</div>
+            <div class="name">Model Pred</div><div class="value" id="metaPred">-</div>
+            <div class="name">Current Label</div><div class="value" id="metaLabel">-</div>
+            <div class="name">Source Path</div><div class="value" id="metaPath">-</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="longAudioTab">
+      <div class="stack">
+        <div class="card stack">
+          <h2>Long Audio Queue</h2>
+          <div class="instruction">
+            Use this tab to build real time-interval ground truth. Load one long recording, review where piano actually happens, save your intervals, then compare them against the model timeline.
+          </div>
+          <label>Queue CSV
+            <input id="longAudioQueueCsvInput" value="ml/data/eval/long_audio_annotation_queue.csv">
+          </label>
+          <label>Annotation CSV
+            <input id="longAudioAnnotationsCsvInput" value="ml/data/eval/long_audio_annotations.csv">
+          </label>
+          <label>Candidate Recording
+            <select id="longAudioSelect"></select>
+          </label>
+          <div class="row">
+            <button id="refreshLongAudioQueueBtn">Refresh Queue</button>
+            <button id="loadLongAudioBtn" class="primary">Load Selected Recording</button>
+          </div>
+          <div id="longAudioStatusText" class="small muted">Load a candidate recording to begin review.</div>
+        </div>
+
+        <div class="card stack">
+          <h3>Review Guide</h3>
+          <div class="instruction">
+            Enter one interval per line as <span class="mono">start_seconds,end_seconds,label,notes</span>.
+            For this task, focus on lines where <span class="mono">label=piano</span>. Use <span class="mono">non_piano</span> only if you want to document explicit negative spans.
+          </div>
+          <div class="meta">
+            <div class="name">Current Audio</div><div class="value" id="longAudioMetaPath">-</div>
+            <div class="name">Queue Notes</div><div class="value" id="longAudioMetaNotes">-</div>
+            <div class="name">Model Estimate</div><div class="value" id="longAudioMetaEstimate">-</div>
+            <div class="name">Eval Result</div><div class="value" id="longAudioMetaEval">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card stack">
+          <h2>Long Audio Player</h2>
+          <audio id="longAudioPlayer" controls preload="metadata"></audio>
+          <div class="row">
+            <button id="runLongAudioEstimateBtn">Run Model Timeline</button>
+            <button id="openTimelineMarkBtn" class="primary">Open In Timeline Mark</button>
+            <button id="evaluateLongAudioBtn">Compare Model vs Labels</button>
+          </div>
+          <div class="instruction">
+            Editing now lives only in <span class="mono">Timeline Mark</span>. This page is for loading a recording, checking model output, and jumping into the marker editor.
+          </div>
+        </div>
+
+        <div class="card stack">
+          <h3>Saved Annotation Intervals</h3>
+          <textarea id="longAudioAnnotationEditor" class="mono" readonly style="min-height:220px;" placeholder="Use Timeline Mark to create and edit intervals."></textarea>
+        </div>
+
+        <div class="card stack">
+          <h3>Model Predicted Piano Intervals</h3>
+          <textarea id="longAudioPredictedBox" class="mono" readonly style="min-height:180px;"></textarea>
+        </div>
+
+        <div class="card stack">
+          <h3>Timeline Evaluation Summary</h3>
+          <textarea id="longAudioEvalBox" class="mono" readonly style="min-height:180px;"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="timelineMarkTab">
+      <div class="stack">
+        <div class="card stack">
+          <h2>Timeline Mark Source</h2>
+          <div class="instruction">
+            This page is built for range marking. Load a long recording, drag across the timeline bars to select a time range, then label that range as piano or non-piano.
+          </div>
+          <label>Queue CSV
+            <input id="timelineMarkQueueCsvInput" value="ml/data/eval/long_audio_annotation_queue.csv">
+          </label>
+          <label>Annotation CSV
+            <input id="timelineMarkAnnotationsCsvInput" value="ml/data/eval/long_audio_annotations.csv">
+          </label>
+          <label>Candidate Recording
+            <select id="timelineMarkSelect"></select>
+          </label>
+          <div class="row">
+            <button id="refreshTimelineQueueBtn">Refresh Queue</button>
+            <button id="loadTimelineAudioBtn" class="primary">Load Recording</button>
+            <button id="runTimelineEstimateBtn">Load Timeline Bars</button>
+          </div>
+          <div id="timelineMarkStatusText" class="small muted">Load a recording, then drag on the timeline to create labeled ranges.</div>
+        </div>
+
+        <div class="card stack">
+          <h3>Selection</h3>
+          <div class="timeline-stats">
+            <div class="kpi"><div class="label">Start</div><div class="value" id="timelineSelStart">-</div></div>
+            <div class="kpi"><div class="label">End</div><div class="value" id="timelineSelEnd">-</div></div>
+            <div class="kpi"><div class="label">Duration</div><div class="value" id="timelineSelDuration">-</div></div>
+          </div>
+          <label>Range Notes
+            <input id="timelineMarkNotesInput" placeholder="optional notes for this range">
+          </label>
+          <div class="row">
+            <button id="timelineAddPianoBtn" class="primary">Mark Piano</button>
+            <button id="timelineAddNonPianoBtn">Mark Non-Piano</button>
+            <button id="timelineAddUnclearBtn">Mark Unclear</button>
+          </div>
+          <div class="row">
+            <button id="timelineDeleteOverlapBtn">Delete Overlapping Marks</button>
+            <button id="timelineClearSelectionBtn">Clear Selection</button>
+            <button id="timelineSaveBtn">Save Marks</button>
+            <button id="timelineEvaluateBtn">Evaluate</button>
+          </div>
+        </div>
+
+        <div class="card stack">
+          <h3>Selected Mark</h3>
+          <div class="meta">
+            <div class="name">Label</div><div class="value" id="timelineSelectedLabel">-</div>
+            <div class="name">Range</div><div class="value" id="timelineSelectedRange">-</div>
+            <div class="name">Notes</div><div class="value" id="timelineSelectedNotes">-</div>
+          </div>
+          <div class="row">
+            <button id="timelineUpdatePianoBtn">Update -> Piano</button>
+            <button id="timelineUpdateNonPianoBtn">Update -> Non-Piano</button>
+            <button id="timelineUpdateUnclearBtn">Update -> Unclear</button>
+            <button id="timelineDeleteSelectedBtn" class="danger">Delete Selected Mark</button>
+          </div>
+        </div>
+
+        <div class="card stack">
+          <h3>Current Marks</h3>
+          <textarea id="timelineMarksBox" class="mono" readonly style="min-height:180px;"></textarea>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card stack">
+          <h2>Timeline Editor</h2>
+          <audio id="timelineMarkPlayer" controls preload="metadata"></audio>
+          <div class="timeline-shell">
+            <canvas id="timelineMarkCanvas" class="timeline-canvas"></canvas>
+          </div>
+          <div class="timeline-legend">
+            <span class="timeline-key"><span class="timeline-swatch" style="background:#0c7a6f;"></span> Model frame bars</span>
+            <span class="timeline-key"><span class="timeline-swatch" style="background:rgba(31,160,145,0.35);"></span> Predicted piano intervals</span>
+            <span class="timeline-key"><span class="timeline-swatch" style="background:rgba(33,110,38,0.38);"></span> Your piano marks</span>
+            <span class="timeline-key"><span class="timeline-swatch" style="background:rgba(151,49,0,0.30);"></span> Your non-piano marks</span>
+            <span class="timeline-key"><span class="timeline-swatch" style="background:rgba(120,112,98,0.32);"></span> Unclear marks</span>
+            <span class="timeline-key"><span class="timeline-swatch" style="background:rgba(255,196,74,0.35);"></span> Current selection</span>
+          </div>
+        </div>
+
+        <div class="card stack">
+          <h3>Timeline Evaluation</h3>
+          <textarea id="timelineEvalBox" class="mono" readonly style="min-height:180px;"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="trainTab">
+      <div class="stack">
+        <div class="card stack">
+          <h2>Train Controls</h2>
+          <div class="instruction">
+            Promote DB-saved labels into managed assets first, then retrain the active model track.
+          </div>
+          <label>Training Track
+            <select id="trainTrackSelect">
+              <option value="v2">v2 Stable</option>
+              <option value="v3">v3 Temporal</option>
+              <option value="v23_ensemble" selected>v2+v3 Ensemble</option>
+            </select>
+          </label>
+          <div class="train-actions">
+            <button id="promoteBtn">Promote Current Labels</button>
+            <button id="retrainBtn" class="primary">Retrain Model</button>
+            <button id="finalizeBtn">Finalize Batch (Auto)</button>
+            <button id="cancelFinalizeBtn" class="danger" style="display:none;">Cancel Finalize</button>
+          </div>
+          <div id="retrainStatusText" class="small muted">Retrain idle.</div>
+          <div class="progress"><div id="retrainProgressBar" class="bar"></div></div>
+        </div>
+        <div class="card stack">
+          <h2>Model Quality Gate</h2>
+          <div class="instruction">
+            Continuous workflow: run dataset audit and hard holdout evaluation before promoting a new model.
+          </div>
+          <div class="row">
+            <button id="auditDatasetBtn">Run Dataset Audit</button>
+            <button id="evalHoldoutBtn" class="primary">Run Holdout Eval</button>
+          </div>
+          <div id="qualityStatusText" class="small muted">Quality gate idle.</div>
+          <label>Dataset Audit Summary
+            <textarea id="auditReportBox" class="mono" readonly style="min-height:140px;"></textarea>
+          </label>
+          <label>Holdout Eval Summary
+            <textarea id="holdoutReportBox" class="mono" readonly style="min-height:220px;"></textarea>
+          </label>
+        </div>
+        <div class="card">
+          <h2>Evaluation Notes</h2>
+          <div id="evalText" class="small muted">Retrain output and metrics summary will appear in the operation log.</div>
+          <div style="margin-top:8px;">
+            <span class="small good">Tip: the default gate and batch scoring track now point to the v2+v3 ensemble.</span>
+          </div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card stack">
+          <h2>Storage Policy</h2>
+          <div class="instruction">
+            Retention cleanup removes heavy batch artifacts from old inbox batches to control disk usage.
+          </div>
+          <div class="row">
+            <label style="width:120px;">TTL Days
+              <input id="ttlDaysInput" type="number" value="14" min="1">
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; width:auto; color:var(--ink); margin-top:18px;">
+              <input id="deleteBatchCompletelyCheck" type="checkbox" style="width:auto;"> Delete whole old batch folders
+            </label>
+          </div>
+          <div class="row">
+            <button id="cleanupBtn">Run Retention Cleanup</button>
+          </div>
+          <div id="cleanupStatusText" class="small muted">Cleanup idle.</div>
+        </div>
+        <div class="card stack">
+          <h2>Storage Intelligence</h2>
+          <div class="instruction">
+            Built-in storage visibility and cleanup. No terminal commands required.
+          </div>
+          <div class="row">
+            <label style="width:120px;">Min MB
+              <input id="historyMinMbInput" type="number" value="50" min="0">
+            </label>
+            <label style="width:120px;">Limit
+              <input id="historyLimitInput" type="number" value="200" min="1" max="5000">
+            </label>
+            <label style="width:120px;">Top Files
+              <input id="analyzeTopNInput" type="number" value="20" min="5" max="200">
+            </label>
+          </div>
+          <div class="row">
+            <button id="refreshHistoryBtn">Refresh Upload History</button>
+            <button id="analyzeStorageBtn">Analyze ML Storage</button>
+            <button id="smartCleanupBtn">Smart Cleanup (Safe)</button>
+          </div>
+          <div id="storageStatusText" class="small muted">Storage tools idle.</div>
+          <label>Upload History (Large + Duplicate Aware)
+            <textarea id="uploadHistoryBox" class="mono" readonly style="min-height:120px;"></textarea>
+          </label>
+          <label>ML Storage Report
+            <textarea id="storageReportBox" class="mono" readonly style="min-height:160px;"></textarea>
+          </label>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let items = [];
+    let idx = 0;
+    let status = { total: 0, labeled: 0, unlabeled: 0, counts: { piano: 0, non_piano: 0, unclear: 0 } };
+    let context = { review_csv_path: "", export_csv: "", active_batch: "" };
+    let summary = { total_scored: 0, predicted_piano: 0, predicted_non_piano: 0, false_positive_candidates: 0 };
+    let longAudio = {
+      queue: [],
+      currentAudioPath: "",
+      currentAudioUrl: "",
+      currentQueueItem: null,
+      annotationRows: [],
+      estimateSummary: null,
+      estimateIntervals: [],
+      estimateFrames: [],
+      evalSummary: null
+    };
+    let timelineMark = {
+      selectionStart: null,
+      selectionEnd: null,
+      dragStart: null,
+      isDragging: false,
+      dragMode: "",
+      selectedAnnotationIndex: -1
+    };
+    let labelQueueInFlight = false;
+    let pendingLabelQueue = [];
+
+    const el = (id) => document.getElementById(id);
+    const logBox = el("logBox");
+    const player = el("player");
+    const uploadProgressBar = el("uploadProgressBar");
+    const uploadStatusText = el("uploadStatusText");
+    const pipelineStatusText = el("pipelineStatusText");
+    const reviewStorageText = el("reviewStorageText");
+    const retrainStatusText = el("retrainStatusText");
+    const retrainProgressBar = el("retrainProgressBar");
+    const cancelFinalizeBtn = el("cancelFinalizeBtn");
+    const cleanupStatusText = el("cleanupStatusText");
+    const storageStatusText = el("storageStatusText");
+    const qualityStatusText = el("qualityStatusText");
+    const auditReportBox = el("auditReportBox");
+    const holdoutReportBox = el("holdoutReportBox");
+    const uploadHistoryBox = el("uploadHistoryBox");
+    const storageReportBox = el("storageReportBox");
+    const shortcutFocusSink = el("shortcutFocusSink");
+    const longAudioPlayer = el("longAudioPlayer");
+    const timelineMarkPlayer = el("timelineMarkPlayer");
+    const timelineMarkCanvas = el("timelineMarkCanvas");
+
+    function reclaimShortcutFocus() {
+      if (!shortcutFocusSink) return;
+      try { shortcutFocusSink.focus({ preventScroll: true }); } catch { shortcutFocusSink.focus(); }
+    }
+
+    function log(msg, isError = false) {
+      const stamp = new Date().toLocaleTimeString();
+      const line = `[${stamp}] ${msg}`;
+      logBox.value = `${line}\n${logBox.value}`.trim();
+      logBox.classList.toggle("warn", isError);
+    }
+
+    function activateTab(tabId) {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+      document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add("active");
+      el(tabId).classList.add("active");
+      renderLongAudioReview();
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+    });
+
+    function current() { return items[idx] || null; }
+
+    function selectedUploadLabelMode() {
+      const chosen = document.querySelector('input[name="uploadLabelMode"]:checked');
+      return chosen ? String(chosen.value || "").trim() : "";
+    }
+
+    function updateContextView() {
+      const pill = el("activeCsvPill");
+      if (context.active_batch) {
+        pill.textContent = `Batch: ${context.active_batch}`;
+      } else {
+        pill.textContent = "No active batch";
+      }
+      el("batchInfoText").textContent = context.active_batch ? `Current batch: ${context.active_batch}` : "Current batch: auto";
+    }
+
+    function updateReviewKpis() {
+      el("kTotal").textContent = status.total || 0;
+      el("kLabeled").textContent = status.labeled || 0;
+      el("kUnlabeled").textContent = status.unlabeled || 0;
+      el("kUnclear").textContent = status.counts.unclear || 0;
+      const pct = status.total ? (status.labeled / status.total) * 100 : 0;
+      el("progressBar").style.width = `${pct.toFixed(1)}%`;
+      const pendingText = pendingLabelQueue.length > 0 || labelQueueInFlight
+        ? ` | Pending saves ${pendingLabelQueue.length}${labelQueueInFlight ? " (saving...)" : ""}`
+        : "";
+      el("statusLine").textContent = `Piano labels ${status.counts.piano || 0} | Non-piano labels ${status.counts.non_piano || 0} | Unclear ${status.counts.unclear || 0}${pendingText}`;
+    }
+
+    function rebuildStatusFromItems() {
+      const counts = { piano: 0, non_piano: 0, unclear: 0 };
+      let labeled = 0;
+      for (const it of items) {
+        const lbl = String(it.human_label || "").trim();
+        if (!lbl) continue;
+        labeled += 1;
+        if (lbl === "piano" || lbl === "non_piano" || lbl === "unclear") counts[lbl] += 1;
+      }
+      status = {
+        total: items.length,
+        labeled: labeled,
+        unlabeled: Math.max(0, items.length - labeled),
+        counts: counts
+      };
+    }
+
+    function updateTestingSnapshot() {
+      el("kScored").textContent = summary.total_scored || 0;
+      el("kModelPiano").textContent = summary.predicted_piano || 0;
+      el("kModelNonPiano").textContent = summary.predicted_non_piano || 0;
+      el("kCandidates").textContent = summary.false_positive_candidates || 0;
+      if (summary.total_scored > 0) {
+        el("snapshotText").textContent = `Scored ${summary.total_scored} clips. Candidate review set: ${summary.false_positive_candidates}.`;
+      }
+    }
+
+    function renderReviewer() {
+      const item = current();
+      if (!item) {
+        el("metaIndex").textContent = "-";
+        el("metaRank").textContent = "-";
+        el("metaScoreLabel").textContent = "Review Score";
+        el("metaProb").textContent = "-";
+        el("metaPred").textContent = "-";
+        el("metaLabel").textContent = "-";
+        el("metaPath").textContent = "-";
+        player.removeAttribute("src");
+        return;
+      }
+      player.src = item.audio_url;
+      el("metaIndex").textContent = `${idx + 1} / ${items.length}`;
+      el("metaRank").textContent = item.review_rank || "-";
+      el("metaScoreLabel").textContent = item.score_label || "Review Score";
+      el("metaProb").textContent = (item.score_value ?? "") === "" ? "-" : item.score_value;
+      el("metaPred").textContent = item.predicted_label || "-";
+      el("metaLabel").textContent = item.human_label || "(unlabeled)";
+      el("metaPath").textContent = item.source_path || "-";
+    }
+
+    function renderAll() {
+      rebuildStatusFromItems();
+      updateContextView();
+      updateReviewKpis();
+      updateTestingSnapshot();
+      renderReviewer();
+      renderLongAudioReview();
+    }
+
+    function currentLongAudioSelection() {
+      const active = document.querySelector(".section.active")?.id || "";
+      if (active === "timelineMarkTab") {
+        return el("timelineMarkSelect").value.trim() || el("longAudioSelect").value.trim();
+      }
+      return el("longAudioSelect").value.trim() || el("timelineMarkSelect").value.trim();
+    }
+
+    function currentQueueCsvSetting() {
+      const active = document.querySelector(".section.active")?.id || "";
+      if (active === "timelineMarkTab") {
+        return el("timelineMarkQueueCsvInput").value.trim() || el("longAudioQueueCsvInput").value.trim();
+      }
+      return el("longAudioQueueCsvInput").value.trim() || el("timelineMarkQueueCsvInput").value.trim();
+    }
+
+    function currentAnnotationsCsvSetting() {
+      const active = document.querySelector(".section.active")?.id || "";
+      if (active === "timelineMarkTab") {
+        return el("timelineMarkAnnotationsCsvInput").value.trim() || el("longAudioAnnotationsCsvInput").value.trim();
+      }
+      return el("longAudioAnnotationsCsvInput").value.trim() || el("timelineMarkAnnotationsCsvInput").value.trim();
+    }
+
+    function syncLongAudioInputs({ queueCsv = null, annotationsCsv = null } = {}) {
+      if (queueCsv !== null) {
+        el("longAudioQueueCsvInput").value = queueCsv;
+        el("timelineMarkQueueCsvInput").value = queueCsv;
+      }
+      if (annotationsCsv !== null) {
+        el("longAudioAnnotationsCsvInput").value = annotationsCsv;
+        el("timelineMarkAnnotationsCsvInput").value = annotationsCsv;
+      }
+    }
+
+    function formatClock(seconds) {
+      const value = Number(seconds);
+      if (!Number.isFinite(value)) return "-";
+      const sign = value < 0 ? "-" : "";
+      const whole = Math.max(0, Math.floor(Math.abs(value)));
+      const mins = Math.floor(whole / 60);
+      const secs = whole % 60;
+      return `${sign}${mins}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function longAudioDurationSeconds() {
+      if (longAudio.estimateSummary && Number.isFinite(Number(longAudio.estimateSummary.audio_duration_seconds))) {
+        return Number(longAudio.estimateSummary.audio_duration_seconds);
+      }
+      if (timelineMarkPlayer && Number.isFinite(timelineMarkPlayer.duration) && timelineMarkPlayer.duration > 0) {
+        return Number(timelineMarkPlayer.duration);
+      }
+      if (longAudioPlayer && Number.isFinite(longAudioPlayer.duration) && longAudioPlayer.duration > 0) {
+        return Number(longAudioPlayer.duration);
+      }
+      if (longAudio.currentQueueItem && Number.isFinite(Number(longAudio.currentQueueItem.duration_minutes))) {
+        return Number(longAudio.currentQueueItem.duration_minutes) * 60.0;
+      }
+      return 0;
+    }
+
+    function formatIntervalRows(rows, { withNotes = true } = {}) {
+      if (!rows || rows.length === 0) return "";
+      return rows.map((row) => {
+        const base = [
+          String(row.start_seconds ?? "").trim(),
+          String(row.end_seconds ?? "").trim(),
+          String(row.label ?? "piano").trim() || "piano"
+        ];
+        if (withNotes) base.push(String(row.notes ?? "").trim());
+        return base.join(",");
+      }).join("\n");
+    }
+
+    function parseAnnotationEditor() {
+      const raw = el("longAudioAnnotationEditor").value || "";
+      const rows = [];
+      for (const rawLine of raw.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) continue;
+        const parts = line.split(",");
+        if (parts.length < 3) throw new Error(`Invalid annotation line: ${line}`);
+        const start = Number(parts[0].trim());
+        const end = Number(parts[1].trim());
+        const label = String(parts[2].trim() || "piano").toLowerCase();
+        const notes = parts.slice(3).join(",").trim();
+        if (!Number.isFinite(start) || !Number.isFinite(end)) throw new Error(`Invalid time values: ${line}`);
+        rows.push({
+          start_seconds: start,
+          end_seconds: end,
+          label,
+          notes
+        });
+      }
+      return rows;
+    }
+
+    function updateLongAudioQueueSelect() {
+      const selects = [el("longAudioSelect"), el("timelineMarkSelect")];
+      const currentValues = selects.map((sel) => sel ? sel.value : "");
+      const preferred = longAudio.currentAudioPath || currentValues.find(Boolean) || "";
+      for (const sel of selects) {
+        if (!sel) continue;
+        sel.innerHTML = "";
+        for (const item of longAudio.queue) {
+          const opt = document.createElement("option");
+          opt.value = item.audio_path || "";
+          const priority = item.priority ? `P${item.priority}` : "?";
+          const mins = item.duration_minutes ? `${item.duration_minutes}m` : "?m";
+          const status = item.status ? `[${item.status}] ` : "";
+          opt.textContent = `${status}${priority} | ${mins} | ${item.batch || ""} | ${item.audio_path || ""}`;
+          sel.appendChild(opt);
+        }
+        if (preferred) sel.value = preferred;
+        if (!sel.value && sel.options.length > 0) sel.selectedIndex = 0;
+      }
+    }
+
+    function normalizeAnnotationRows(rows) {
+      const out = [];
+      for (const row of rows || []) {
+        const start = Number(row.start_seconds);
+        const end = Number(row.end_seconds);
+        const label = String(row.label || "").trim().toLowerCase();
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+        out.push({
+          start_seconds: Number(start.toFixed(3)),
+          end_seconds: Number(end.toFixed(3)),
+          label: label || "piano",
+          notes: String(row.notes || "").trim()
+        });
+      }
+      out.sort((a, b) => (a.start_seconds - b.start_seconds) || (a.end_seconds - b.end_seconds) || a.label.localeCompare(b.label));
+      return out;
+    }
+
+    function setAnnotationRows(rows, { updateEditor = true } = {}) {
+      longAudio.annotationRows = normalizeAnnotationRows(rows);
+      if (timelineMark.selectedAnnotationIndex >= longAudio.annotationRows.length) {
+        timelineMark.selectedAnnotationIndex = -1;
+      }
+      if (updateEditor) {
+        el("longAudioAnnotationEditor").value = formatIntervalRows(longAudio.annotationRows);
+      }
+    }
+
+    function parseEditorIntoAnnotationRows() {
+      const rows = parseAnnotationEditor();
+      setAnnotationRows(rows, { updateEditor: false });
+      return longAudio.annotationRows;
+    }
+
+    function getSelectionRange() {
+      const a = timelineMark.selectionStart;
+      const b = timelineMark.selectionEnd;
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      const start = Math.min(a, b);
+      const end = Math.max(a, b);
+      if (end - start <= 0) return null;
+      return { start, end };
+    }
+
+    function clearTimelineSelection() {
+      timelineMark.selectionStart = null;
+      timelineMark.selectionEnd = null;
+      timelineMark.dragStart = null;
+      timelineMark.isDragging = false;
+      timelineMark.dragMode = "";
+    }
+
+    function selectedAnnotationRow() {
+      const idx = Number(timelineMark.selectedAnnotationIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= longAudio.annotationRows.length) return null;
+      return longAudio.annotationRows[idx];
+    }
+
+    function selectAnnotationIndex(idx) {
+      if (!Number.isInteger(idx) || idx < 0 || idx >= longAudio.annotationRows.length) {
+        timelineMark.selectedAnnotationIndex = -1;
+        return;
+      }
+      timelineMark.selectedAnnotationIndex = idx;
+      const row = longAudio.annotationRows[idx];
+      timelineMark.selectionStart = Number(row.start_seconds);
+      timelineMark.selectionEnd = Number(row.end_seconds);
+      el("timelineMarkNotesInput").value = String(row.notes || "");
+    }
+
+    function clearSelectedAnnotation() {
+      timelineMark.selectedAnnotationIndex = -1;
+      el("timelineMarkNotesInput").value = "";
+    }
+
+    function clampTimeToDuration(seconds) {
+      const duration = longAudioDurationSeconds();
+      if (!(duration > 0)) return Number(seconds) || 0;
+      return Math.max(0, Math.min(duration, Number(seconds) || 0));
+    }
+
+    function updateTimelineSelectionKpis() {
+      const range = getSelectionRange();
+      el("timelineSelStart").textContent = range ? formatClock(range.start) : "-";
+      el("timelineSelEnd").textContent = range ? formatClock(range.end) : "-";
+      el("timelineSelDuration").textContent = range ? `${(range.end - range.start).toFixed(2)}s` : "-";
+      const selected = selectedAnnotationRow();
+      el("timelineSelectedLabel").textContent = selected ? selected.label : "-";
+      el("timelineSelectedRange").textContent = selected ? `${formatClock(selected.start_seconds)} -> ${formatClock(selected.end_seconds)} (${(Number(selected.end_seconds) - Number(selected.start_seconds)).toFixed(2)}s)` : "-";
+      el("timelineSelectedNotes").textContent = selected ? (selected.notes || "-") : "-";
+    }
+
+    function renderLongAudioReview() {
+      updateLongAudioQueueSelect();
+      const item = longAudio.currentQueueItem || longAudio.queue.find((x) => (x.audio_path || "") === longAudio.currentAudioPath) || null;
+      el("longAudioMetaPath").textContent = longAudio.currentAudioPath || "-";
+      el("longAudioMetaNotes").textContent = item ? (item.notes || "-") : "-";
+      if (longAudioPlayer) {
+        if (longAudio.currentAudioUrl) {
+          longAudioPlayer.src = longAudio.currentAudioUrl;
+        } else {
+          longAudioPlayer.removeAttribute("src");
+        }
+      }
+      if (longAudio.estimateSummary) {
+        const s = longAudio.estimateSummary;
+        el("longAudioMetaEstimate").textContent = `${Number(s.estimated_piano_seconds || 0).toFixed(1)}s across ${s.num_intervals || 0} interval(s)`;
+      } else {
+        el("longAudioMetaEstimate").textContent = "-";
+      }
+      if (longAudio.evalSummary && longAudio.evalSummary.overlap_metrics) {
+        const m = longAudio.evalSummary.overlap_metrics;
+        el("longAudioMetaEval").textContent = `abs err ${Number(longAudio.evalSummary.absolute_error_seconds || 0).toFixed(1)}s | F1 ${Number(m.f1 || 0).toFixed(3)}`;
+      } else {
+        el("longAudioMetaEval").textContent = "-";
+      }
+      el("longAudioAnnotationEditor").value = formatIntervalRows(longAudio.annotationRows || []);
+      el("longAudioPredictedBox").value = longAudio.estimateIntervals && longAudio.estimateIntervals.length
+        ? formatIntervalRows(longAudio.estimateIntervals.map((row) => ({ ...row, label: "piano", notes: "" })), { withNotes: false })
+        : "";
+      el("longAudioEvalBox").value = longAudio.evalSummary ? toPrettyText(longAudio.evalSummary) : "";
+      renderTimelineMarkPage();
+    }
+
+    function timelineColorForLabel(label) {
+      const value = String(label || "").trim().toLowerCase();
+      if (value === "piano") return "rgba(33,110,38,0.38)";
+      if (value === "non_piano") return "rgba(151,49,0,0.30)";
+      return "rgba(120,112,98,0.32)";
+    }
+
+    function renderTimelineCanvas() {
+      if (!timelineMarkCanvas) return;
+      const rect = timelineMarkCanvas.getBoundingClientRect();
+      const width = Math.max(320, Math.floor(rect.width || timelineMarkCanvas.clientWidth || 320));
+      const height = Math.max(220, Math.floor(rect.height || timelineMarkCanvas.clientHeight || 320));
+      const dpr = window.devicePixelRatio || 1;
+      if (timelineMarkCanvas.width !== Math.floor(width * dpr) || timelineMarkCanvas.height !== Math.floor(height * dpr)) {
+        timelineMarkCanvas.width = Math.floor(width * dpr);
+        timelineMarkCanvas.height = Math.floor(height * dpr);
+      }
+      const ctx = timelineMarkCanvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#fbf6ec";
+      ctx.fillRect(0, 0, width, height);
+
+      const duration = longAudioDurationSeconds();
+      if (!(duration > 0)) {
+        ctx.fillStyle = "#665f54";
+        ctx.font = '14px "Manrope", sans-serif';
+        ctx.fillText("Load a long recording and run timeline bars.", 16, 28);
+        return;
+      }
+
+      const topBandY = 18;
+      const topBandH = 26;
+      const bottomBandY = height - 36;
+      const bottomBandH = 18;
+      const waveformTop = 58;
+      const waveformBottom = height - 58;
+      const waveformMid = (waveformTop + waveformBottom) / 2;
+      const waveformHalf = Math.max(18, (waveformBottom - waveformTop) / 2);
+
+      const tickTarget = duration > 3600 ? 300 : duration > 1200 ? 120 : duration > 300 ? 60 : 30;
+      ctx.strokeStyle = "rgba(102,95,84,0.15)";
+      ctx.fillStyle = "#665f54";
+      ctx.font = '11px "Source Sans 3", sans-serif';
+      for (let t = 0; t <= duration; t += tickTarget) {
+        const x = Math.min(width, (t / duration) * width);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+        ctx.fillText(formatClock(t), Math.min(width - 42, x + 4), 12);
+      }
+
+      (longAudio.annotationRows || []).forEach((row, idx) => {
+        const x0 = (Number(row.start_seconds) / duration) * width;
+        const x1 = (Number(row.end_seconds) / duration) * width;
+        ctx.fillStyle = timelineColorForLabel(row.label);
+        ctx.fillRect(x0, topBandY, Math.max(2, x1 - x0), topBandH);
+        if (idx === timelineMark.selectedAnnotationIndex) {
+          ctx.strokeStyle = "rgba(31,28,23,0.92)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, topBandY, Math.max(2, x1 - x0), topBandH);
+          const handleW = 8;
+          ctx.fillStyle = "#1f1c17";
+          ctx.fillRect(x0 - handleW / 2, topBandY - 3, handleW, topBandH + 6);
+          ctx.fillRect(x1 - handleW / 2, topBandY - 3, handleW, topBandH + 6);
+        }
+      });
+
+      for (const row of longAudio.estimateIntervals || []) {
+        const x0 = (Number(row.start_seconds) / duration) * width;
+        const x1 = (Number(row.end_seconds) / duration) * width;
+        ctx.fillStyle = "rgba(31,160,145,0.35)";
+        ctx.fillRect(x0, bottomBandY, Math.max(2, x1 - x0), bottomBandH);
+      }
+
+      const frames = longAudio.estimateFrames || [];
+      if (frames.length > 0) {
+        ctx.fillStyle = "#0c7a6f";
+        for (const row of frames) {
+          const start = Number(row.start_seconds);
+          const end = Number(row.end_seconds);
+          const prob = Number(row.piano_probability_smoothed ?? row.piano_probability ?? 0);
+          if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(prob)) continue;
+          const x0 = (start / duration) * width;
+          const x1 = (end / duration) * width;
+          const barW = Math.max(1.5, x1 - x0 - 0.5);
+          const amp = Math.max(0.02, Math.min(1.0, prob));
+          const halfH = Math.max(4, amp * waveformHalf);
+          ctx.fillRect(x0, waveformMid - halfH, barW, halfH * 2);
+        }
+      } else {
+        ctx.strokeStyle = "rgba(12,122,111,0.22)";
+        ctx.beginPath();
+        ctx.moveTo(0, waveformMid);
+        ctx.lineTo(width, waveformMid);
+        ctx.stroke();
+      }
+
+      const range = getSelectionRange();
+      if (range) {
+        const x0 = (range.start / duration) * width;
+        const x1 = (range.end / duration) * width;
+        ctx.fillStyle = "rgba(255,196,74,0.35)";
+        ctx.fillRect(x0, 0, Math.max(2, x1 - x0), height);
+        ctx.strokeStyle = "rgba(168,110,0,0.85)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x0, 0, Math.max(2, x1 - x0), height);
+      }
+
+      const currentTime = Number(timelineMarkPlayer?.currentTime || longAudioPlayer?.currentTime || 0);
+      if (Number.isFinite(currentTime) && currentTime >= 0) {
+        const playX = Math.max(0, Math.min(width, (currentTime / duration) * width));
+        ctx.strokeStyle = "#973100";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(playX, 0);
+        ctx.lineTo(playX, height);
+        ctx.stroke();
+      }
+    }
+
+    function renderTimelineMarkPage() {
+      const item = longAudio.currentQueueItem || longAudio.queue.find((x) => (x.audio_path || "") === longAudio.currentAudioPath) || null;
+      if (timelineMarkPlayer) {
+        if (longAudio.currentAudioUrl) {
+          timelineMarkPlayer.src = longAudio.currentAudioUrl;
+        } else {
+          timelineMarkPlayer.removeAttribute("src");
+        }
+      }
+      el("timelineMarksBox").value = formatIntervalRows(longAudio.annotationRows || []);
+      el("timelineEvalBox").value = longAudio.evalSummary ? toPrettyText(longAudio.evalSummary) : "";
+      const statusText = item
+        ? `${item.batch || ""} | ${item.duration_minutes || "?"}m | ${item.notes || ""}`.trim()
+        : (longAudio.currentAudioPath || "No recording loaded.");
+      el("timelineMarkStatusText").textContent = el("timelineMarkStatusText").textContent || statusText;
+      updateTimelineSelectionKpis();
+      renderTimelineCanvas();
+    }
+
+    function findAnnotationIndexAtTime(seconds) {
+      const t = Number(seconds);
+      if (!Number.isFinite(t)) return -1;
+      for (let i = 0; i < longAudio.annotationRows.length; i++) {
+        const row = longAudio.annotationRows[i];
+        const start = Number(row.start_seconds);
+        const end = Number(row.end_seconds);
+        if (t >= start && t <= end) return i;
+      }
+      return -1;
+    }
+
+    function findSelectedAnnotationHandle(seconds) {
+      const row = selectedAnnotationRow();
+      const t = Number(seconds);
+      if (!row || !Number.isFinite(t) || !timelineMarkCanvas) return "";
+      const duration = Math.max(1, longAudioDurationSeconds());
+      const rect = timelineMarkCanvas.getBoundingClientRect();
+      const secondsPerPx = duration / Math.max(1, rect.width || 1);
+      const tol = Math.max(0.25, secondsPerPx * 12);
+      if (Math.abs(t - Number(row.start_seconds)) <= tol) return "resize_start";
+      if (Math.abs(t - Number(row.end_seconds)) <= tol) return "resize_end";
+      return "";
+    }
+
+    function withBusy(btn, fn) {
+      return async () => {
+        btn.disabled = true;
+        try { await fn(); }
+        finally { btn.disabled = false; }
+      };
+    }
+
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {})
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    async function getJson(url) {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    async function postMultipart(url, formData) {
+      const res = await fetch(url, { method: "POST", body: formData });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Upload failed");
+      return data;
+    }
+
+    function postMultipartWithProgress(url, formData, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable && onProgress) onProgress(evt.loaded, evt.total);
+        };
+        xhr.onerror = () => reject(new Error("Upload failed due to network error"));
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && data.ok) resolve(data);
+            else reject(new Error(data.error || `Upload failed (${xhr.status})`));
+          } catch {
+            reject(new Error("Upload failed: invalid server response"));
+          }
+        };
+        xhr.send(formData);
+      });
+    }
+
+    async function loadItemsFromServer() {
+      const res = await fetch("/api/items");
+      const data = await res.json();
+      items = data.items || [];
+      status = data.status || status;
+      context = data.context || context;
+      const batchInput = el("batchReviewInput");
+      if (batchInput && context.active_batch && !batchInput.value) batchInput.value = context.active_batch;
+      idx = Math.min(idx, Math.max(0, items.length - 1));
+      renderAll();
+    }
+
+    function collectRunBatchPayload() {
+      const fpThresholdRaw = el("fpThresholdInput").value.trim();
+      return {
+        model: el("modelInput").value.trim(),
+        false_positive_threshold: fpThresholdRaw === "" ? null : Number(fpThresholdRaw),
+        top_k: Number(el("topKInput").value || 120),
+        clip_seconds: Number(el("clipSecInput").value || 8),
+        hop_seconds: Number(el("hopSecInput").value || 8),
+        auto_promote_all_non_piano: el("autoPromoteCheck").checked
+      };
+    }
+
+    async function createNewBatch() {
+      const data = await postJson("/api/batch/new", {});
+      context = data.context || context;
+      renderAll();
+      log(`Created batch: ${data.batch}`);
+    }
+
+    async function uploadBatchFiles() {
+      const files = el("uploadFilesInput").files;
+      if (!files || files.length === 0) throw new Error("Select files to upload");
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f, f.name);
+      fd.append("upload_label_mode", selectedUploadLabelMode());
+      uploadProgressBar.style.width = "0%";
+      uploadStatusText.textContent = `Uploading ${files.length} file(s)... 0%`;
+      const data = await postMultipartWithProgress("/api/upload_batch", fd, (loaded, total) => {
+        const pct = total > 0 ? Math.min(100, (loaded / total) * 100) : 0;
+        uploadProgressBar.style.width = `${pct.toFixed(1)}%`;
+        uploadStatusText.textContent = `Uploading ${files.length} file(s)... ${pct.toFixed(1)}%`;
+      });
+      context = data.context || context;
+      renderAll();
+      log(`Uploaded ${data.saved_count} file(s) -> ${data.raw_long_dir}`);
+      uploadProgressBar.style.width = "100%";
+      if (data.upload_label_mode) {
+        uploadStatusText.textContent = `Upload complete. Saved ${data.saved_count} file(s). Preset label: ${data.upload_label_mode}.`;
+      } else {
+        uploadStatusText.textContent = `Upload complete. Saved ${data.saved_count} file(s).`;
+      }
+      if (data.skipped && data.skipped.length) log(`Skipped ${data.skipped.length} file(s).`, true);
+      el("uploadFilesInput").value = "";
+      await refreshUploadHistory();
+    }
+
+    function hasPendingSelectedUploadFiles() {
+      const files = el("uploadFilesInput").files;
+      return !!(files && files.length > 0);
+    }
+
+    async function runBatch() {
+      if (!context.active_batch) {
+        pipelineStatusText.className = "small warn";
+        pipelineStatusText.textContent = "No active batch. Create a batch and upload files first.";
+        throw new Error("No active batch. Click 'Create New Batch' and upload files first.");
+      }
+      if (hasPendingSelectedUploadFiles()) {
+        pipelineStatusText.className = "small running";
+        pipelineStatusText.textContent = "Uploading selected files before running pipeline...";
+        log("Detected selected files that were not uploaded yet. Uploading automatically before pipeline run...");
+        await uploadBatchFiles();
+      }
+      const startedAt = Date.now();
+      pipelineStatusText.className = "small running";
+      pipelineStatusText.textContent = "Pipeline running... preparing clips and scoring.";
+      const timer = setInterval(() => {
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        pipelineStatusText.textContent = `Pipeline running... ${sec}s elapsed.`;
+      }, 1000);
+      log("Running batch test workflow...");
+      try {
+        const data = await postJson("/api/pipeline/run_batch", collectRunBatchPayload());
+        items = data.items || [];
+        status = data.status || status;
+        context = data.context || context;
+        summary = data.summary || summary;
+        idx = 0;
+        if (!el("batchReviewInput").value) el("batchReviewInput").value = summary.batch_dir || context.active_batch || "";
+        renderAll();
+        activateTab("reviewTab");
+        log(data.command_output || "Batch completed.");
+        if (data.summary && data.summary.auto_clip_labels) {
+          const autoLabels = data.summary.auto_clip_labels;
+          log(`Auto-labeled clips: total=${autoLabels.labeled_clips || 0}, piano=${autoLabels.piano || 0}, non_piano=${autoLabels.non_piano || 0}`);
+        }
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        pipelineStatusText.className = "small good";
+        pipelineStatusText.textContent = `Pipeline complete in ${sec}s. Review is loaded.`;
+      } catch (err) {
+        pipelineStatusText.className = "small warn";
+        pipelineStatusText.textContent = `Pipeline failed: ${err.message}`;
+        throw err;
+      } finally {
+        clearInterval(timer);
+      }
+    }
+
+    async function loadBatch() {
+      const batchPath = el("batchReviewInput").value.trim();
+      if (!batchPath) throw new Error("Provide batch path first");
+      const data = await postJson("/api/load_batch", { batch: batchPath });
+      items = data.items || [];
+      status = data.status || status;
+      context = data.context || context;
+      el("batchReviewInput").value = context.active_batch || batchPath;
+      idx = 0;
+      renderAll();
+      reviewStorageText.className = "small good";
+      reviewStorageText.textContent = "Batch review loaded from DB.";
+      log(`Loaded batch review: ${context.active_batch}`);
+    }
+
+    async function refreshLongAudioQueue() {
+      const queueCsv = currentQueueCsvSetting();
+      const data = await getJson(`/api/long_audio/queue?queue_csv=${encodeURIComponent(queueCsv)}`);
+      syncLongAudioInputs({ queueCsv });
+      longAudio.queue = data.items || [];
+      updateLongAudioQueueSelect();
+      renderLongAudioReview();
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = `Loaded ${longAudio.queue.length} long-audio candidate(s).`;
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = `Loaded ${longAudio.queue.length} long-audio candidate(s).`;
+    }
+
+    async function loadSelectedLongAudio() {
+      const audioPath = currentLongAudioSelection();
+      if (!audioPath) throw new Error("Select a recording first");
+      const annotationsCsv = currentAnnotationsCsvSetting();
+      const data = await postJson("/api/long_audio/load", {
+        audio_path: audioPath,
+        annotations_csv: annotationsCsv
+      });
+      syncLongAudioInputs({ annotationsCsv: data.annotations_csv || annotationsCsv });
+      longAudio.currentAudioPath = data.audio_path || audioPath;
+      longAudio.currentAudioUrl = data.audio_url || "";
+      longAudio.currentQueueItem = longAudio.queue.find((x) => (x.audio_path || "") === longAudio.currentAudioPath) || null;
+      setAnnotationRows(data.annotation_rows || []);
+      longAudio.estimateSummary = null;
+      longAudio.estimateIntervals = [];
+      longAudio.estimateFrames = [];
+      longAudio.evalSummary = null;
+      clearTimelineSelection();
+      renderLongAudioReview();
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = "Loaded long recording and existing annotations.";
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Loaded recording. Drag on the timeline after bars are available.";
+      log(`Loaded long-audio review target: ${longAudio.currentAudioPath}`);
+    }
+
+    async function runLongAudioEstimate() {
+      if (!longAudio.currentAudioPath) throw new Error("Load a long recording first");
+      el("longAudioStatusText").className = "small running";
+      el("longAudioStatusText").textContent = "Running model timeline estimate on long recording...";
+      const data = await postJson("/api/long_audio/estimate", {
+        audio_path: longAudio.currentAudioPath
+      });
+      longAudio.estimateSummary = data.summary || null;
+      longAudio.estimateIntervals = data.intervals || [];
+      longAudio.estimateFrames = data.frames || [];
+      renderLongAudioReview();
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = "Model timeline estimate complete.";
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Timeline bars loaded. Drag to mark ranges.";
+      if (data.command_output) log(data.command_output);
+    }
+
+    async function saveLongAudioAnnotations() {
+      if (!longAudio.currentAudioPath) throw new Error("Load a long recording first");
+      const active = document.querySelector(".section.active")?.id || "";
+      const rows = active === "timelineMarkTab" ? longAudio.annotationRows.slice() : parseEditorIntoAnnotationRows();
+      const annotationsCsv = currentAnnotationsCsvSetting();
+      const data = await postJson("/api/long_audio/save_annotations", {
+        audio_path: longAudio.currentAudioPath,
+        annotations_csv: annotationsCsv,
+        rows
+      });
+      syncLongAudioInputs({ annotationsCsv: data.annotations_csv || annotationsCsv });
+      setAnnotationRows(data.annotation_rows || []);
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = `Saved ${data.saved_count || 0} annotation interval(s).`;
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = `Saved ${data.saved_count || 0} annotation interval(s).`;
+      renderLongAudioReview();
+      log(`Saved long-audio annotations for ${longAudio.currentAudioPath}`);
+    }
+
+    async function evaluateLongAudio() {
+      if (!longAudio.currentAudioPath) throw new Error("Load a long recording first");
+      const annotationsCsv = currentAnnotationsCsvSetting();
+      const data = await postJson("/api/long_audio/evaluate", {
+        audio_path: longAudio.currentAudioPath,
+        annotations_csv: annotationsCsv
+      });
+      longAudio.evalSummary = data.summary || null;
+      longAudio.estimateIntervals = data.intervals || longAudio.estimateIntervals;
+      longAudio.estimateFrames = data.frames || longAudio.estimateFrames;
+      renderLongAudioReview();
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = "Model-vs-label evaluation complete.";
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Model-vs-label evaluation complete.";
+      if (data.command_output) log(data.command_output);
+    }
+
+    function copyPredictedIntervalsToEditor() {
+      if (!longAudio.estimateIntervals || longAudio.estimateIntervals.length === 0) {
+        throw new Error("Run model timeline first");
+      }
+      setAnnotationRows(
+        longAudio.estimateIntervals.map((row) => ({
+          start_seconds: row.start_seconds,
+          end_seconds: row.end_seconds,
+          label: "piano",
+          notes: "copied from model prediction"
+        }))
+      );
+      el("longAudioStatusText").className = "small good";
+      el("longAudioStatusText").textContent = "Copied predicted piano intervals into the editor. Review and fix them before saving.";
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Copied model intervals into current marks. Adjust them before saving.";
+      renderLongAudioReview();
+    }
+
+    function openTimelineMarkTab() {
+      activateTab("timelineMarkTab");
+      if (longAudio.currentAudioPath) {
+        const selects = [el("timelineMarkSelect"), el("longAudioSelect")];
+        for (const sel of selects) {
+          if (sel) sel.value = longAudio.currentAudioPath;
+        }
+      }
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = longAudio.currentAudioPath
+        ? "Editing is unified here. Drag on the timeline or click existing marks to refine them."
+        : "Load a recording to begin editing.";
+    }
+
+    function addSelectionInterval(label) {
+      if (!longAudio.currentAudioPath) throw new Error("Load a long recording first");
+      const range = getSelectionRange();
+      if (!range) throw new Error("Drag on the timeline to create a non-empty selection");
+      const notes = el("timelineMarkNotesInput").value.trim();
+      const next = longAudio.annotationRows.concat([{
+        start_seconds: range.start,
+        end_seconds: range.end,
+        label,
+        notes
+      }]);
+      setAnnotationRows(next);
+      clearTimelineSelection();
+      timelineMark.selectedAnnotationIndex = -1;
+      renderLongAudioReview();
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = `Added ${label} mark ${formatClock(range.start)} -> ${formatClock(range.end)}.`;
+    }
+
+    function deleteSelectionOverlaps() {
+      const range = getSelectionRange();
+      if (!range) throw new Error("Drag on the timeline to select a range first");
+      const kept = longAudio.annotationRows.filter((row) => Number(row.end_seconds) <= range.start || Number(row.start_seconds) >= range.end);
+      const removed = longAudio.annotationRows.length - kept.length;
+      setAnnotationRows(kept);
+      clearTimelineSelection();
+      clearSelectedAnnotation();
+      renderLongAudioReview();
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = `Removed ${removed} overlapping mark(s).`;
+    }
+
+    function updateSelectedAnnotation(label) {
+      const idx = Number(timelineMark.selectedAnnotationIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= longAudio.annotationRows.length) {
+        throw new Error("Select an existing mark first");
+      }
+      const notes = el("timelineMarkNotesInput").value.trim();
+      const next = longAudio.annotationRows.slice();
+      next[idx] = {
+        ...next[idx],
+        label,
+        notes
+      };
+      setAnnotationRows(next);
+      selectAnnotationIndex(idx);
+      renderLongAudioReview();
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = `Updated selected mark -> ${label}.`;
+    }
+
+    function deleteSelectedAnnotation() {
+      const idx = Number(timelineMark.selectedAnnotationIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= longAudio.annotationRows.length) {
+        throw new Error("Select an existing mark first");
+      }
+      const next = longAudio.annotationRows.slice();
+      next.splice(idx, 1);
+      setAnnotationRows(next);
+      clearTimelineSelection();
+      clearSelectedAnnotation();
+      renderLongAudioReview();
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Deleted selected mark.";
+    }
+
+    function timeAtCanvasEvent(evt) {
+      const duration = longAudioDurationSeconds();
+      if (!(duration > 0) || !timelineMarkCanvas) return null;
+      const rect = timelineMarkCanvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, evt.clientX - rect.left));
+      return Math.max(0, Math.min(duration, (x / Math.max(1, rect.width)) * duration));
+    }
+
+    function bindTimelineCanvasInteractions() {
+      if (!timelineMarkCanvas) return;
+      timelineMarkCanvas.addEventListener("pointerdown", (evt) => {
+        const t = timeAtCanvasEvent(evt);
+        if (t === null) return;
+        const handleMode = findSelectedAnnotationHandle(t);
+        if (handleMode) {
+          timelineMark.isDragging = true;
+          timelineMark.dragMode = handleMode;
+          timelineMark.dragStart = t;
+          timelineMarkCanvas.setPointerCapture?.(evt.pointerId);
+          renderLongAudioReview();
+          return;
+        }
+        const hitIdx = findAnnotationIndexAtTime(t);
+        if (hitIdx >= 0) {
+          selectAnnotationIndex(hitIdx);
+          timelineMark.isDragging = false;
+          timelineMark.dragStart = null;
+          timelineMark.dragMode = "";
+          renderLongAudioReview();
+          return;
+        }
+        clearSelectedAnnotation();
+        timelineMark.isDragging = true;
+        timelineMark.dragMode = "select_range";
+        timelineMark.dragStart = t;
+        timelineMark.selectionStart = t;
+        timelineMark.selectionEnd = t;
+        timelineMarkCanvas.setPointerCapture?.(evt.pointerId);
+        renderLongAudioReview();
+      });
+      timelineMarkCanvas.addEventListener("pointermove", (evt) => {
+        if (!timelineMark.isDragging) return;
+        const t = timeAtCanvasEvent(evt);
+        if (t === null) return;
+        if (timelineMark.dragMode === "resize_start" || timelineMark.dragMode === "resize_end") {
+          const idx = Number(timelineMark.selectedAnnotationIndex);
+          if (Number.isInteger(idx) && idx >= 0 && idx < longAudio.annotationRows.length) {
+            const next = longAudio.annotationRows.slice();
+            const row = { ...next[idx] };
+            const otherEdge = timelineMark.dragMode === "resize_start" ? Number(row.end_seconds) : Number(row.start_seconds);
+            const minGap = 0.05;
+            if (timelineMark.dragMode === "resize_start") {
+              row.start_seconds = Number(Math.min(otherEdge - minGap, clampTimeToDuration(t)).toFixed(3));
+            } else {
+              row.end_seconds = Number(Math.max(otherEdge + minGap, clampTimeToDuration(t)).toFixed(3));
+            }
+            next[idx] = row;
+            setAnnotationRows(next);
+            selectAnnotationIndex(idx);
+          }
+        } else {
+          timelineMark.selectionEnd = t;
+        }
+        renderLongAudioReview();
+      });
+      const finishSelection = (evt) => {
+        if (!timelineMark.isDragging) return;
+        const t = timeAtCanvasEvent(evt);
+        if (t !== null && timelineMark.dragMode !== "resize_start" && timelineMark.dragMode !== "resize_end") {
+          timelineMark.selectionEnd = t;
+        }
+        const dragMode = timelineMark.dragMode;
+        const range = getSelectionRange();
+        const small = dragMode === "select_range" && (!range || (range.end - range.start) < 0.2);
+        if (small) {
+          const seekTo = Number.isFinite(timelineMark.selectionEnd) ? timelineMark.selectionEnd : timelineMark.dragStart;
+          clearTimelineSelection();
+          if (timelineMarkPlayer && Number.isFinite(seekTo)) timelineMarkPlayer.currentTime = seekTo;
+        }
+        timelineMark.isDragging = false;
+        timelineMark.dragStart = null;
+        timelineMark.dragMode = "";
+        renderLongAudioReview();
+      };
+      timelineMarkCanvas.addEventListener("pointerup", finishSelection);
+      timelineMarkCanvas.addEventListener("pointercancel", finishSelection);
+      timelineMarkCanvas.addEventListener("mouseleave", (evt) => {
+        if (timelineMark.isDragging) finishSelection(evt);
+      });
+    }
+
+    async function buildHardPositiveQueue() {
+      reviewStorageText.className = "small running";
+      reviewStorageText.textContent = "Building hard-positive queue...";
+      const data = await postJson("/api/review/build_hard_positive_queue", {
+        model: "ml/models/piano_detector_v23_ensemble.joblib",
+        config: "ml/configs/train_config_v2.yaml",
+        top_k: 120,
+        max_prob: 0.75
+      });
+      items = data.items || [];
+      status = data.status || status;
+      context = data.context || context;
+      idx = 0;
+      renderAll();
+      activateTab("reviewTab");
+      reviewStorageText.className = "small good";
+      reviewStorageText.textContent = `Hard-positive mainline queue ready: ${items.length} clips.`;
+      if (data.command_output) log(data.command_output);
+    }
+
+    async function loadFalseNegativeQueue() {
+      reviewStorageText.className = "small running";
+      reviewStorageText.textContent = "Loading missed-piano holdout queue...";
+      const data = await postJson("/api/review/load_false_negative_queue", {});
+      items = data.items || [];
+      status = data.status || status;
+      context = data.context || context;
+      idx = 0;
+      renderAll();
+      activateTab("reviewTab");
+      reviewStorageText.className = "small good";
+      reviewStorageText.textContent = `Missed-piano holdout queue ready: ${items.length} clips.`;
+    }
+
+    async function processLabelQueue() {
+      if (labelQueueInFlight) return;
+      labelQueueInFlight = true;
+      renderAll();
+      try {
+        while (pendingLabelQueue.length > 0) {
+          const task = pendingLabelQueue[0];
+          try {
+            const data = await postJson("/api/label", { source_path: task.source_path, label: task.label });
+            context = data.context || context;
+            status = data.status || status;
+            pendingLabelQueue.shift();
+            renderAll();
+          } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            log(`Label save failed for ${task.source_path}: ${msg}`, true);
+            break;
+          }
+        }
+      } finally {
+        labelQueueInFlight = false;
+        renderAll();
+      }
+    }
+
+    async function saveLabel(label) {
+      const item = current();
+      if (!item) return;
+      const prevLabel = String(item.human_label || "");
+
+      // Optimistic UI update + queue for durable DB write.
+      item.human_label = label;
+      if (prevLabel !== label) {
+        pendingLabelQueue.push({ source_path: item.source_path, label: label });
+      } else {
+        log(`Label unchanged (${label || "empty"}) for current clip; moving to next unlabeled.`);
+      }
+      renderAll();
+      reclaimShortcutFocus();
+      goNextUnlabeled();
+      await processLabelQueue();
+    }
+
+    async function promoteLabels() {
+      log("Promoting labels...");
+      const data = await postJson("/api/pipeline/promote", {});
+      log(data.command_output || "Promotion done.");
+    }
+
+    function selectedTrainTrack() {
+      const track = (el("trainTrackSelect")?.value || "v23_ensemble").trim().toLowerCase();
+      if (track === "v3") {
+        return {
+          name: "v3",
+          config: "ml/configs/train_config_v3.yaml",
+          model_out: "ml/models/piano_detector_v3.joblib",
+          report_out: "ml/reports/piano_detector_v3_metrics.json",
+          holdout_report: "ml/reports/piano_detector_v3_holdout_metrics.json",
+          holdout_preds: "ml/reports/piano_detector_v3_holdout_predictions.csv"
+        };
+      }
+      if (track === "v23_ensemble") {
+        return {
+          name: "v2+v3 ensemble",
+          config: "ml/configs/train_config_v2.yaml",
+          model_out: "ml/models/piano_detector_v23_ensemble.joblib",
+          report_out: "ml/reports/piano_detector_v23_ensemble_build.json",
+          holdout_report: "ml/reports/piano_detector_v23_ensemble_holdout_metrics.json",
+          holdout_preds: "ml/reports/piano_detector_v23_ensemble_holdout_predictions.csv",
+          ensemble_method: "weighted_average",
+          weight_v2: 0.7,
+          weight_v3: 0.3,
+          threshold: 0.84,
+          review_threshold: 0.72
+        };
+      }
+      return {
+        name: "v2",
+        config: "ml/configs/train_config_v2.yaml",
+        model_out: "ml/models/piano_detector_v2.joblib",
+        report_out: "ml/reports/piano_detector_v2_metrics.json",
+        holdout_report: "ml/reports/piano_detector_v2_holdout_metrics.json",
+        holdout_preds: "ml/reports/piano_detector_v2_holdout_predictions.csv"
+      };
+    }
+
+    async function retrainModel() {
+      const track = selectedTrainTrack();
+      const startedAt = Date.now();
+      retrainStatusText.className = "small running";
+      retrainStatusText.textContent = `Retraining ${track.name} in progress... 0s elapsed.`;
+      retrainProgressBar.classList.add("indeterminate");
+      retrainProgressBar.style.width = "";
+      const t = setInterval(() => {
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        retrainStatusText.textContent = `Retraining ${track.name}... ${sec}s elapsed.`;
+      }, 1000);
+      log(`Retraining ${track.name} model...`);
+      try {
+        const data = await postJson("/api/pipeline/retrain", track);
+        log(data.command_output || "Retrain completed.");
+        el("evalText").textContent = `${track.name} retrain completed. Check operation log for val/test metrics and manifest counts.`;
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        retrainStatusText.className = "small good";
+        retrainStatusText.textContent = `${track.name} retrain complete in ${sec}s.`;
+        retrainProgressBar.style.width = "100%";
+      } catch (err) {
+        retrainStatusText.className = "small warn";
+        retrainStatusText.textContent = `Retrain failed: ${err.message}`;
+        retrainProgressBar.style.width = "0%";
+        throw err;
+      } finally {
+        clearInterval(t);
+        retrainProgressBar.classList.remove("indeterminate");
+      }
+    }
+
+    async function finalizeBatch() {
+      const startedAt = Date.now();
+      retrainStatusText.className = "small running";
+      retrainStatusText.textContent = "Finalizing batch (promote + retrain + cleanup)... 0s elapsed.";
+      retrainProgressBar.classList.add("indeterminate");
+      retrainProgressBar.style.width = "";
+      cancelFinalizeBtn.style.display = "inline-block";
+      cancelFinalizeBtn.disabled = false;
+      const t = setInterval(() => {
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        retrainStatusText.textContent = `Finalizing batch... ${sec}s elapsed.`;
+      }, 1000);
+      log("Finalizing current batch...");
+      try {
+        const data = await postJson("/api/pipeline/finalize", {});
+        log(data.command_output || "Finalize completed.");
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        retrainStatusText.className = "small good";
+        retrainStatusText.textContent = `Finalize complete in ${sec}s.`;
+        retrainProgressBar.style.width = "100%";
+        el("evalText").textContent = "Finalize complete. Batch artifacts cleaned and model retrained.";
+      } catch (err) {
+        retrainStatusText.className = "small warn";
+        if ((err.message || "").toLowerCase().includes("cancel")) {
+          retrainStatusText.textContent = "Finalize cancelled.";
+        } else {
+          retrainStatusText.textContent = `Finalize failed: ${err.message}`;
+        }
+        retrainProgressBar.style.width = "0%";
+        throw err;
+      } finally {
+        clearInterval(t);
+        retrainProgressBar.classList.remove("indeterminate");
+        cancelFinalizeBtn.style.display = "none";
+      }
+    }
+
+    async function cancelFinalize() {
+      cancelFinalizeBtn.disabled = true;
+      try {
+        const data = await postJson("/api/pipeline/finalize/cancel", {});
+        retrainStatusText.className = "small warn";
+        retrainStatusText.textContent = data.message || "Finalize cancellation requested.";
+        log(data.message || "Finalize cancellation requested.");
+      } catch (err) {
+        retrainStatusText.className = "small warn";
+        retrainStatusText.textContent = `Cancel failed: ${err.message}`;
+        log(err.message, true);
+      } finally {
+        cancelFinalizeBtn.disabled = false;
+      }
+    }
+
+    async function runRetentionCleanup() {
+      const ttlDays = Number(el("ttlDaysInput").value || 14);
+      const deleteBatchCompletely = el("deleteBatchCompletelyCheck").checked;
+      cleanupStatusText.className = "small running";
+      cleanupStatusText.textContent = "Running retention cleanup...";
+      log(`Running retention cleanup (ttl_days=${ttlDays}, delete_batch_completely=${deleteBatchCompletely})...`);
+      try {
+        const data = await postJson("/api/storage/retention_cleanup", {
+          ttl_days: ttlDays,
+          delete_batch_completely: deleteBatchCompletely
+        });
+        cleanupStatusText.className = "small good";
+        cleanupStatusText.textContent = "Retention cleanup completed.";
+        log(data.command_output || "Retention cleanup completed.");
+        await analyzeStorage();
+      } catch (err) {
+        cleanupStatusText.className = "small warn";
+        cleanupStatusText.textContent = `Retention cleanup failed: ${err.message}`;
+        throw err;
+      }
+    }
+
+    function formatSizeMb(n) {
+      return `${Number(n || 0).toFixed(2)} MB`;
+    }
+
+    function formatLocalTimestamp(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) return raw;
+      return dt.toLocaleString();
+    }
+
+    async function refreshUploadHistory() {
+      const minMb = Number(el("historyMinMbInput").value || 0);
+      const limit = Number(el("historyLimitInput").value || 200);
+      storageStatusText.className = "small running";
+      storageStatusText.textContent = "Loading upload history...";
+      const data = await getJson(`/api/storage/upload_history?min_size_mb=${encodeURIComponent(minMb)}&limit=${encodeURIComponent(limit)}&statuses=success,duplicate`);
+      const lines = [];
+      lines.push(`DB: ${data.db_path}`);
+      lines.push(`Rows: ${data.count}`);
+      lines.push("");
+      for (const row of (data.items || [])) {
+        const kind = row.status === "duplicate" ? "DUP" : "OK ";
+        lines.push(`${kind} ${formatLocalTimestamp(row.uploaded_at)} | ${formatSizeMb((row.size_bytes || 0) / (1024 * 1024))} | ${row.source_name}`);
+        if (row.stored_path) lines.push(`  -> ${row.stored_path}`);
+      }
+      uploadHistoryBox.value = lines.join("\n");
+      storageStatusText.className = "small good";
+      storageStatusText.textContent = "Upload history refreshed.";
+    }
+
+    async function analyzeStorage() {
+      const topN = Number(el("analyzeTopNInput").value || 20);
+      storageStatusText.className = "small running";
+      storageStatusText.textContent = "Analyzing ML storage...";
+      const data = await getJson(`/api/storage/analyze?top_n=${encodeURIComponent(topN)}`);
+      const lines = [];
+      lines.push(`Generated: ${formatLocalTimestamp(data.generated_at)}`);
+      if (data.db_overview) {
+        lines.push(`DB: ${data.db_overview.db_path}`);
+        lines.push(`Uploads: ${data.db_overview.total_uploads} (success ${data.db_overview.success_uploads}, duplicate ${data.db_overview.duplicate_uploads})`);
+        lines.push(`Tracked files: ${data.db_overview.total_files}, review labels: ${data.db_overview.review_labels}`);
+      }
+      lines.push("");
+      lines.push("Sections:");
+      for (const [name, stat] of Object.entries(data.sections || {})) {
+        lines.push(`- ${name}: ${formatSizeMb(stat.size_mb)} | files=${stat.file_count}`);
+      }
+      lines.push("");
+      lines.push("Inbox batches:");
+      for (const b of (data.inbox_batches || [])) {
+        lines.push(`- ${b.batch}: raw_long=${b.raw_long_mb}MB (${b.raw_long_files}) clips=${b.clips_mb}MB (${b.clips_files})`);
+      }
+      lines.push("");
+      lines.push(`Top ${Math.min(topN, (data.top_files || []).length)} largest files:`);
+      for (const f of (data.top_files || [])) {
+        lines.push(`- ${f.size_mb}MB | ${f.path}`);
+      }
+      storageReportBox.value = lines.join("\n");
+      storageStatusText.className = "small good";
+      storageStatusText.textContent = "Storage analysis complete.";
+    }
+
+    async function runSmartCleanup() {
+      const ttlDays = Number(el("ttlDaysInput").value || 14);
+      const deleteBatchCompletely = el("deleteBatchCompletelyCheck").checked;
+      storageStatusText.className = "small running";
+      storageStatusText.textContent = "Running smart cleanup...";
+      const data = await postJson("/api/storage/smart_cleanup", {
+        ttl_days: ttlDays,
+        delete_batch_completely: deleteBatchCompletely,
+        remove_pycache: true,
+        remove_upload_temps: true
+      });
+      log(`Smart cleanup removed dirs=${data.removed_dirs_count}, files=${data.removed_files_count}`);
+      if (data.retention_output) log(data.retention_output);
+      storageStatusText.className = "small good";
+      storageStatusText.textContent = "Smart cleanup complete.";
+      await analyzeStorage();
+      await refreshUploadHistory();
+    }
+
+    function toPrettyText(obj) {
+      try { return JSON.stringify(obj || {}, null, 2); }
+      catch { return String(obj || ""); }
+    }
+
+    async function runDatasetAudit() {
+      qualityStatusText.className = "small running";
+      qualityStatusText.textContent = "Running dataset audit...";
+      const data = await postJson("/api/pipeline/audit_dataset", {});
+      if (data.report) {
+        auditReportBox.value = toPrettyText(data.report);
+      }
+      if (data.command_output) log(data.command_output);
+      qualityStatusText.className = "small good";
+      qualityStatusText.textContent = `Dataset audit complete. Suspects: ${(data.report || {}).num_suspicious_rows || 0}`;
+    }
+
+    async function runHoldoutEval() {
+      const track = selectedTrainTrack();
+      qualityStatusText.className = "small running";
+      qualityStatusText.textContent = `Running ${track.name} holdout evaluation...`;
+      const data = await postJson("/api/pipeline/eval_holdout", {
+        model: track.model_out,
+        config: track.config,
+        out_report: track.holdout_report,
+        out_preds: track.holdout_preds
+      });
+      if (data.report) {
+        holdoutReportBox.value = toPrettyText(data.report);
+        const auc = Number((data.report || {}).auc_roc || 0).toFixed(4);
+        const fpr = Number((data.report || {}).fpr || 0).toFixed(4);
+        qualityStatusText.className = "small good";
+        qualityStatusText.textContent = `${track.name} holdout complete. AUC=${auc}, FPR=${fpr}`;
+      } else {
+        qualityStatusText.className = "small good";
+        qualityStatusText.textContent = `${track.name} holdout complete.`;
+      }
+      if (data.command_output) log(data.command_output);
+    }
+
+    function goNext() {
+      if (!items.length) return;
+      idx = Math.min(idx + 1, items.length - 1);
+      renderReviewer();
+    }
+    function goPrev() {
+      if (!items.length) return;
+      idx = Math.max(idx - 1, 0);
+      renderReviewer();
+    }
+    function goNextUnlabeled() {
+      if (!items.length) return;
+      for (let i = idx + 1; i < items.length; i++) {
+        if (!items[i].human_label) { idx = i; renderReviewer(); return; }
+      }
+      for (let i = 0; i <= idx; i++) {
+        if (!items[i].human_label) { idx = i; renderReviewer(); return; }
+      }
+      log("No unlabeled clips left.");
+    }
+
+    function isTypingTarget(t) {
+      if (!t) return false;
+      const tag = t.tagName || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (typeof t.isContentEditable === "boolean" && t.isContentEditable) return true;
+      return false;
+    }
+
+    let lastShortcutSig = "";
+    let lastShortcutAt = 0;
+
+    function detectShortcutAction(e) {
+      const key = e.key || "";
+      const code = e.code || "";
+      const keyCode = Number(e.keyCode || e.which || 0);
+
+      if (key === "1" || key === "!" || code === "Digit1" || code === "Numpad1" || keyCode === 49 || keyCode === 97) return "label_non_piano";
+      if (key === "2" || key === "@" || code === "Digit2" || code === "Numpad2" || keyCode === 50 || keyCode === 98) return "label_piano";
+      if (key === "3" || key === "#" || code === "Digit3" || code === "Numpad3" || keyCode === 51 || keyCode === 99) return "label_unclear";
+      if (key === "ArrowRight") return "next";
+      if (key === "ArrowLeft") return "prev";
+      if (key === " " || code === "Space" || keyCode === 32) return "toggle_play";
+      return "";
+    }
+
+    function shouldDedupShortcut(sig) {
+      const now = Date.now();
+      if (sig && lastShortcutSig === sig && (now - lastShortcutAt) < 220) return true;
+      lastShortcutSig = sig;
+      lastShortcutAt = now;
+      return false;
+    }
+
+    function handleGlobalShortcuts(e) {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (isTypingTarget(e.target)) return;
+
+      const action = detectShortcutAction(e);
+      if (!action) return;
+
+      // Labels may be swallowed on keydown by native audio controls in some browsers.
+      // Execute labels on both keydown/keyup with dedup guard.
+      const isLabelAction = action.startsWith("label_");
+      if (isLabelAction && e.type !== "keydown" && e.type !== "keyup") return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const sig = `${action}:${e.code || e.key || ""}`;
+      if (shouldDedupShortcut(sig)) return;
+
+      if (action === "label_non_piano") {
+        saveLabel("non_piano").catch(err => log(err.message, true));
+        return;
+      }
+      if (action === "label_piano") {
+        saveLabel("piano").catch(err => log(err.message, true));
+        return;
+      }
+      if (action === "label_unclear") {
+        saveLabel("unclear").catch(err => log(err.message, true));
+        return;
+      }
+      if (action === "next") {
+        goNext();
+        return;
+      }
+      if (action === "prev") {
+        goPrev();
+        return;
+      }
+      if (action === "toggle_play") {
+        if (player.paused) player.play(); else player.pause();
+      }
+    }
+
+    // Capture-phase listeners across window/document/body/audio for browser focus quirks.
+    window.addEventListener("keydown", handleGlobalShortcuts, true);
+    window.addEventListener("keyup", handleGlobalShortcuts, true);
+    document.addEventListener("keydown", handleGlobalShortcuts, true);
+    document.addEventListener("keyup", handleGlobalShortcuts, true);
+    document.addEventListener("keypress", handleGlobalShortcuts, true);
+    if (document.body) {
+      document.body.addEventListener("keydown", handleGlobalShortcuts, true);
+      document.body.addEventListener("keyup", handleGlobalShortcuts, true);
+    }
+    if (player) {
+      player.addEventListener("keydown", handleGlobalShortcuts, true);
+      player.addEventListener("keyup", handleGlobalShortcuts, true);
+      player.addEventListener("click", () => setTimeout(reclaimShortcutFocus, 0), true);
+      player.addEventListener("pointerup", () => setTimeout(reclaimShortcutFocus, 0), true);
+      player.addEventListener("focus", () => setTimeout(reclaimShortcutFocus, 0), true);
+    }
+    if (longAudioPlayer) {
+      longAudioPlayer.addEventListener("click", () => setTimeout(reclaimShortcutFocus, 0), true);
+      longAudioPlayer.addEventListener("pointerup", () => setTimeout(reclaimShortcutFocus, 0), true);
+      longAudioPlayer.addEventListener("focus", () => setTimeout(reclaimShortcutFocus, 0), true);
+      longAudioPlayer.addEventListener("timeupdate", renderTimelineCanvas);
+      longAudioPlayer.addEventListener("loadedmetadata", renderTimelineCanvas);
+    }
+    if (timelineMarkPlayer) {
+      timelineMarkPlayer.addEventListener("timeupdate", renderTimelineCanvas);
+      timelineMarkPlayer.addEventListener("loadedmetadata", renderTimelineCanvas);
+      timelineMarkPlayer.addEventListener("play", renderTimelineCanvas);
+      timelineMarkPlayer.addEventListener("pause", renderTimelineCanvas);
+      timelineMarkPlayer.addEventListener("click", () => setTimeout(reclaimShortcutFocus, 0), true);
+      timelineMarkPlayer.addEventListener("pointerup", () => setTimeout(reclaimShortcutFocus, 0), true);
+      timelineMarkPlayer.addEventListener("focus", () => setTimeout(reclaimShortcutFocus, 0), true);
+    }
+    bindTimelineCanvasInteractions();
+    window.addEventListener("resize", renderTimelineCanvas);
+    el("newBatchBtn").addEventListener("click", withBusy(el("newBatchBtn"), async () => {
+      try { await createNewBatch(); } catch (err) { log(err.message, true); }
+    }));
+    el("uploadBtn").addEventListener("click", withBusy(el("uploadBtn"), async () => {
+      try { await uploadBatchFiles(); } catch (err) { uploadStatusText.textContent = `Upload failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("runBatchBtn").addEventListener("click", withBusy(el("runBatchBtn"), async () => {
+      try { await runBatch(); } catch (err) { log(err.message, true); }
+    }));
+    el("runBatchBtnTop").addEventListener("click", withBusy(el("runBatchBtnTop"), async () => {
+      try { await runBatch(); } catch (err) { log(err.message, true); }
+    }));
+    el("loadBatchBtn").addEventListener("click", withBusy(el("loadBatchBtn"), async () => {
+      try { await loadBatch(); } catch (err) { reviewStorageText.className = "small warn"; reviewStorageText.textContent = `Load failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("buildHardPositiveBtn").addEventListener("click", withBusy(el("buildHardPositiveBtn"), async () => {
+      try { await buildHardPositiveQueue(); } catch (err) { reviewStorageText.className = "small warn"; reviewStorageText.textContent = `Queue build failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("loadFalseNegativeBtn").addEventListener("click", withBusy(el("loadFalseNegativeBtn"), async () => {
+      try { await loadFalseNegativeQueue(); } catch (err) { reviewStorageText.className = "small warn"; reviewStorageText.textContent = `Missed-piano queue failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("refreshLongAudioQueueBtn").addEventListener("click", withBusy(el("refreshLongAudioQueueBtn"), async () => {
+      try { await refreshLongAudioQueue(); } catch (err) { el("longAudioStatusText").className = "small warn"; el("longAudioStatusText").textContent = `Queue refresh failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("loadLongAudioBtn").addEventListener("click", withBusy(el("loadLongAudioBtn"), async () => {
+      try { await loadSelectedLongAudio(); } catch (err) { el("longAudioStatusText").className = "small warn"; el("longAudioStatusText").textContent = `Load failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("runLongAudioEstimateBtn").addEventListener("click", withBusy(el("runLongAudioEstimateBtn"), async () => {
+      try { await runLongAudioEstimate(); } catch (err) { el("longAudioStatusText").className = "small warn"; el("longAudioStatusText").textContent = `Estimate failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("evaluateLongAudioBtn").addEventListener("click", withBusy(el("evaluateLongAudioBtn"), async () => {
+      try { await evaluateLongAudio(); } catch (err) { el("longAudioStatusText").className = "small warn"; el("longAudioStatusText").textContent = `Evaluation failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("openTimelineMarkBtn").addEventListener("click", () => {
+      openTimelineMarkTab();
+    });
+    el("refreshTimelineQueueBtn").addEventListener("click", withBusy(el("refreshTimelineQueueBtn"), async () => {
+      try { await refreshLongAudioQueue(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = `Queue refresh failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("loadTimelineAudioBtn").addEventListener("click", withBusy(el("loadTimelineAudioBtn"), async () => {
+      try { await loadSelectedLongAudio(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = `Load failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("runTimelineEstimateBtn").addEventListener("click", withBusy(el("runTimelineEstimateBtn"), async () => {
+      try { await runLongAudioEstimate(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = `Timeline bars failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("timelineAddPianoBtn").addEventListener("click", () => {
+      try { addSelectionInterval("piano"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineAddNonPianoBtn").addEventListener("click", () => {
+      try { addSelectionInterval("non_piano"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineAddUnclearBtn").addEventListener("click", () => {
+      try { addSelectionInterval("unclear"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineDeleteOverlapBtn").addEventListener("click", () => {
+      try { deleteSelectionOverlaps(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineClearSelectionBtn").addEventListener("click", () => {
+      clearTimelineSelection();
+      clearSelectedAnnotation();
+      renderLongAudioReview();
+      el("timelineMarkStatusText").className = "small good";
+      el("timelineMarkStatusText").textContent = "Selection cleared.";
+    });
+    el("timelineUpdatePianoBtn").addEventListener("click", () => {
+      try { updateSelectedAnnotation("piano"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineUpdateNonPianoBtn").addEventListener("click", () => {
+      try { updateSelectedAnnotation("non_piano"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineUpdateUnclearBtn").addEventListener("click", () => {
+      try { updateSelectedAnnotation("unclear"); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineDeleteSelectedBtn").addEventListener("click", () => {
+      try { deleteSelectedAnnotation(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = err.message; log(err.message, true); }
+    });
+    el("timelineSaveBtn").addEventListener("click", withBusy(el("timelineSaveBtn"), async () => {
+      try { await saveLongAudioAnnotations(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = `Save failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("timelineEvaluateBtn").addEventListener("click", withBusy(el("timelineEvaluateBtn"), async () => {
+      try { await evaluateLongAudio(); } catch (err) { el("timelineMarkStatusText").className = "small warn"; el("timelineMarkStatusText").textContent = `Evaluation failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("promoteBtn").addEventListener("click", withBusy(el("promoteBtn"), async () => {
+      try { await promoteLabels(); } catch (err) { log(err.message, true); }
+    }));
+    el("retrainBtn").addEventListener("click", withBusy(el("retrainBtn"), async () => {
+      try { await retrainModel(); } catch (err) { log(err.message, true); }
+    }));
+    el("finalizeBtn").addEventListener("click", withBusy(el("finalizeBtn"), async () => {
+      try { await finalizeBatch(); } catch (err) { log(err.message, true); }
+    }));
+    el("cancelFinalizeBtn").addEventListener("click", withBusy(el("cancelFinalizeBtn"), async () => {
+      await cancelFinalize();
+    }));
+    el("cleanupBtn").addEventListener("click", withBusy(el("cleanupBtn"), async () => {
+      try { await runRetentionCleanup(); } catch (err) { log(err.message, true); }
+    }));
+    el("refreshHistoryBtn").addEventListener("click", withBusy(el("refreshHistoryBtn"), async () => {
+      try { await refreshUploadHistory(); } catch (err) { storageStatusText.className = "small warn"; storageStatusText.textContent = `History failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("analyzeStorageBtn").addEventListener("click", withBusy(el("analyzeStorageBtn"), async () => {
+      try { await analyzeStorage(); } catch (err) { storageStatusText.className = "small warn"; storageStatusText.textContent = `Analyze failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("smartCleanupBtn").addEventListener("click", withBusy(el("smartCleanupBtn"), async () => {
+      try { await runSmartCleanup(); } catch (err) { storageStatusText.className = "small warn"; storageStatusText.textContent = `Smart cleanup failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("auditDatasetBtn").addEventListener("click", withBusy(el("auditDatasetBtn"), async () => {
+      try { await runDatasetAudit(); } catch (err) { qualityStatusText.className = "small warn"; qualityStatusText.textContent = `Dataset audit failed: ${err.message}`; log(err.message, true); }
+    }));
+    el("evalHoldoutBtn").addEventListener("click", withBusy(el("evalHoldoutBtn"), async () => {
+      try { await runHoldoutEval(); } catch (err) { qualityStatusText.className = "small warn"; qualityStatusText.textContent = `Holdout eval failed: ${err.message}`; log(err.message, true); }
+    }));
+
+    el("nextBtn").addEventListener("click", goNext);
+    el("prevBtn").addEventListener("click", goPrev);
+    el("unlabeledBtn").addEventListener("click", goNextUnlabeled);
+    el("nonBtn").addEventListener("click", () => saveLabel("non_piano").catch(err => log(err.message, true)));
+    el("pianoBtn").addEventListener("click", () => saveLabel("piano").catch(err => log(err.message, true)));
+    el("unclearBtn").addEventListener("click", () => saveLabel("unclear").catch(err => log(err.message, true)));
+    el("clearBtn").addEventListener("click", () => saveLabel("").catch(err => log(err.message, true)));
+
+    loadItemsFromServer().catch(err => log(`Initial load failed: ${err.message}`, true));
+    refreshLongAudioQueue().catch(err => log(`Long-audio queue load failed: ${err.message}`, true));
+    analyzeStorage().catch(err => log(`Storage analyze failed: ${err.message}`, true));
+    refreshUploadHistory().catch(err => log(`Upload history load failed: ${err.message}`, true));
+    reclaimShortcutFocus();
+  </script>
+</body>
+</html>

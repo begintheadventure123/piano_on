@@ -1,0 +1,38 @@
+seed: 42
+sample_rate: 16000
+n_mels: 64
+hop_length: 512
+n_fft: 1024
+n_mfcc: 20
+max_duration_seconds: 20.0
+train_split: 0.8
+val_split: 0.1
+test_split: 0.1
+classifier:
+  type: extra_trees
+  n_estimators: 350
+  min_samples_leaf: 2
+  max_features: sqrt
+  class_weight: balanced_subsample
+group_split:
+  enabled: true
+calibration:
+  enabled: false
+  method: isotonic
+  min_val_samples: 80
+  min_val_per_class: 20
+thresholding:
+  policy: balanced_accuracy
+  default: 0.5
+  min_threshold: 0.05
+  max_threshold: 0.95
+  review_recall_target: 0.98
+metrics:
+  recall_target_for_fpr: 0.95
+hard_positive_boosts:
+  non_piano_weight: 3.0
+  review_copy_piano_weight: 4.0
+  review_copy_non_piano_weight: 3.0
+  home_piano_dataset_weight: 8.0
+  home_piano_path_weight: 8.0
+  low_confidence_home_path_weight: 10.0

@@ -10,5 +10,12 @@ test_split: 0.1
 classifier:
   type: logistic_regression
   C: 1.0
-  max_iter: 1000
+  max_iter: 5000
   class_weight: balanced
+group_split:
+  enabled: true
+calibration:
+  enabled: true
+  method: platt
+metrics:
+  recall_target_for_fpr: 0.95

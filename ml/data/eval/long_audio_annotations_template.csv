@@ -1,0 +1,4 @@
+audio_path,start_seconds,end_seconds,label,notes
+D:\git\piano_on\path\to\long_recording_001.m4a,12.50,97.25,piano,continuous piano practice
+D:\git\piano_on\path\to\long_recording_001.m4a,130.00,142.75,piano,short piano return
+D:\git\piano_on\path\to\long_recording_001.m4a,210.00,240.00,non_piano,conversation only
