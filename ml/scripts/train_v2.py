@@ -152,7 +152,7 @@ def main() -> None:
         max_features=str(cfg["classifier"].get("max_features", "sqrt")),
         class_weight=str(cfg["classifier"].get("class_weight", "balanced_subsample")),
         random_state=int(cfg["seed"]),
-        n_jobs=-1,
+        n_jobs=int(cfg["classifier"].get("n_jobs", 1)),
     )
     train_weights = sample_weights[tr_idx]
     model.fit(X_train, y_train, sample_weight=train_weights)
